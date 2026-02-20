@@ -1,17 +1,15 @@
-# PubParts.xyz
+# Esk8CAD
 
-PubParts.xyz is a website to display a collection of open source or otherwise aftermarket OneWheel parts.
+Open catalog of electric skateboard, DIY, OEM PEV parts — linked CAD files. Aim is to reduce digging through forums and scattered repos of files.
 
-## Code Development Environment Setup
-Want to contribute to this repository? Here's some steps to get set up.
+Gatsby frontend + JSON data. Early stage, actively evolving.
 
-1. Install NodeJS version 20.x
-2. Clone this repository
-3. Navigate to the local clone directory and run `npm install` to install dependencies
-4. In the repository root, create a `.env` file containing the contents of the `.env.example` file
-5. Start debugging via either:
-    - `${workspaceRoot}/node_modules/.bin/gatsby develop`
-    - In Visual Studio Code, you can run `Debug: Start Debugging`
 
-## Contributing
-Now that you've set up the development environment, be sure to check out the [contributing guidelines](https://github.com/Jared-Is-Coding/pubparts.xyz/blob/master/CONTRIBUTING.md).
+website building goal: external database for making a more future proof base for creative and unique ideas (CAD parts also haveing performance reviews from irl ride testing. Info + community feedback and voting system for finding priority for CAD part design improvments)
+
+
+Categories duplicated for now (data + types) — refactor pending.
+
+Open to contributions.
+
+Quinn
