@@ -1,0 +1,181 @@
+@import "./variables.scss";
+@import "./fonts.scss";
+@import "./colors.scss";
+
+/**
+ * ------------------
+ *    Page Elements
+ * ------------------
+ **/
+
+html {
+    height: 100%;
+}
+
+nav.navbar {
+    background: $primary-color;
+}
+
+#site-navbar {
+    flex-direction: row-reverse;
+
+    .navbar-nav a {
+        text-wrap: nowrap;
+    }
+}
+
+@media only screen and (max-width: 991px) {
+    div#site-navbar.navbar-collapse.collapse.show {
+        border-bottom: dashed 2px;
+    }
+}
+
+.dropdown .dropdown-menu {
+    -webkit-transition: max-height 0.3s, opacity 0.2s 0.1s, visibility 0s 0.3s;
+    -moz-transition: max-height 0.3s, opacity 0.2s 0.1s, visibility 0s 0.3s;
+    -ms-transition: max-height 0.3s, opacity 0.2s 0.1s, visibility 0s 0.3s;
+    -o-transition: max-height 0.3s, opacity 0.2s 0.1s, visibility 0s 0.3s;
+    transition: max-height 0.3s, opacity 0.2s 0.1s, visibility 0s 0.3s;
+
+    max-height: 0;
+    display: block;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    padding: 0;
+    border: 0;
+}
+
+.dropdown.show .dropdown-menu {
+    -webkit-transition: max-height 0.3s, opacity 0.1s 0.2s, visibility 0s;
+    -moz-transition: max-height 0.3s, opacity 0.1s 0.2s, visibility 0s;
+    -ms-transition: max-height 0.3s, opacity 0.1s 0.2s, visibility 0s;
+    -o-transition: max-height 0.3s, opacity 0.1s 0.2s, visibility 0s;
+    transition: max-height 0.3s, opacity 0.1s 0.2s, visibility 0s;
+
+    max-height: 100vh;
+    opacity: 1;
+    visibility: visible;
+    border: solid 1px;
+}
+
+h1 .tagline {
+    font-weight: bold;
+}
+
+body {
+    padding-top: 70px;
+}
+
+main {
+    padding-bottom: 10px;
+}
+
+
+/**
+ * ------------------
+ *     Containers
+ * ------------------
+ **/
+
+.flex-col {
+    display: flex;
+    flex-direction: column;
+
+    >* {
+        padding: 5px;
+    }
+}
+
+.flex-row {
+    display: flex;
+    flex-direction: row;
+
+    >* {
+        padding: 5px;
+    }
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.flex-center {
+    display: flex;
+    justify-content: center;
+    justify-self: center;
+    align-items: center;
+    align-self: center;
+    text-align: center;
+}
+
+.flex-top {
+    align-self: baseline;
+}
+
+.row-item {
+    &:not(:first-child) {
+        margin-left: 15px;
+    }
+}
+
+.flex-gap-5 {
+    gap: 5px;
+}
+
+
+/**
+ * ------------------
+ *     Helpers
+ * ------------------
+ **/
+
+.full-width {
+    width: 100%;
+}
+
+.uppercase {
+    text-transform: uppercase;
+}
+
+.titlecase {
+    text-transform: capitalize;
+}
+
+
+/**
+ * ------------------
+ *     Other
+ * ------------------
+ **/
+
+.floating-icon-container {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    opacity: 20%;
+    z-index: -1;
+    user-select: none;
+
+    display: inline-flex;
+    flex-direction: column;
+}
+
+.floating-icon {
+    margin: 0 15px 5px 0;
+    padding-left: 5px;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.spin-once {
+    animation: spin 0.6s ease-in-out;
+}

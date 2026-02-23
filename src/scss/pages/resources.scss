@@ -1,0 +1,57 @@
+@import "../variables.scss";
+
+.page-resources {
+    .btn-group {
+        flex-wrap: wrap;
+        gap: 0.5rem;
+
+        .btn {
+            border-radius: var(--bs-border-radius) !important;
+        }
+    }
+
+    .card {
+        background-color: $tertiary-color !important;
+        border-radius: $card-border-radius !important;
+        margin-bottom: 20px;
+
+        .display-over-top-right {
+            position: absolute;
+            align-items: flex-end;
+            top: 5px;
+            right: 5px;
+        }
+
+        .display-over-top-left {
+            position: absolute;
+            align-items: flex-start;
+            top: 5px;
+            left: 5px;
+        }
+
+        .card-title {
+            color: $secondary-color;
+        }
+
+        .card-body {
+            min-height: 3em;
+        }
+    }
+    
+    .card.resource-website a {
+        color: $link-color !important;
+    }
+    
+    .card.resource-spreadsheet a {
+        color: $alt-link-color !important;
+    }
+    
+    .card.resource-app a,
+    .card.resource-app h3 {
+        color: $alt2-link-color !important;
+    }
+
+    .card-title .badge {
+        display: inline-flex;
+    }
+}

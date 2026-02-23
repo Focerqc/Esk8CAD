@@ -1,0 +1,49 @@
+/**
+ * ------------------
+ *       Colors
+ * ------------------
+ **/
+
+body {
+    background: linear-gradient(175deg, $primary-color 75%, $secondary-color-muted 100%) fixed;
+    color: $secondary-color !important;
+}
+
+a:not(.card-body a):not(a.alert-link):not(.btn) {
+    color: $secondary-color !important;
+}
+
+.navbar-toggler {
+    color: white !important;
+}
+
+.card-body {
+    .card-text {
+        color: $secondary-color;
+    }
+
+    a:not(.btn) {
+        color: $link-color !important;
+    }
+}
+
+.dropdown-menu {
+    background-color: $tertiary-color;
+
+    a:hover {
+        background-color: $primary-color;
+        transition: background-color 0.15s ease-in;
+    }
+}
+
+.modal-content {
+    background-color: $tertiary-color !important;
+
+    .modal-header .btn-close {
+        color: white !important
+    }
+}
+
+small {
+    color: $secondary-color !important;
+}

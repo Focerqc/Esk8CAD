@@ -1,0 +1,13 @@
+name = "esk8cad"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "public"
+
+[vars]
+GATSBY_SUPABASE_URL = "https://vupaclakcmrkzmrgmfou.supabase.co"
+GATSBY_SUPABASE_ANON_KEY = "sb_publishable_bXcnBAcXwFbj28Z7csY4UQ_wCdm_87o"
+GATSBY_ADMIN_EMAIL = "quinncfoster@gmail.com"
+
+[[kv_namespaces]]
+
+binding = "SUBMIT_RATE_LIMIT"
+id = "1379c7070d0c4f0ea51ee8d72fd16174"
