@@ -15,7 +15,6 @@ export interface PartSchema {
 
 export const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
     const [imgError, setImgError] = useState(false);
-    const [copied, setCopied] = useState(false);
 
     return (
         <Col
@@ -89,25 +88,9 @@ export const PartCard = ({ part, index }: { part: PartSchema; index?: number }) 
                                 </button>
                             )}
                             {part.dropboxUrl && (
-                                <div className="d-flex gap-2 w-100">
-                                    <Card.Link href={part.dropboxUrl} target="_blank" className="btn btn-outline-success btn-sm flex-grow-1 fw-bold m-0 position-relative z-index-1">
-                                        Mirror Link
-                                    </Card.Link>
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm fw-bold px-3 position-relative z-index-1"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            navigator.clipboard.writeText(part.dropboxUrl!);
-                                            setCopied(true);
-                                            setTimeout(() => setCopied(false), 2000);
-                                        }}
-                                        title="Copy Mirror Link"
-                                        style={{ whiteSpace: 'nowrap', transition: 'all 0.2s', ...(copied ? { backgroundColor: '#198754', color: 'white', borderColor: '#198754' } : {}) }}
-                                    >
-                                        {copied ? "Copied!" : "Copy"}
-                                    </button>
-                                </div>
+                                <Card.Link href={part.dropboxUrl} target="_blank" className="btn btn-outline-success btn-sm w-100 fw-bold m-0 position-relative z-index-1">
+                                    Mirror
+                                </Card.Link>
                             )}
                         </div>
                     </Card.Body>

@@ -96,7 +96,7 @@ const Page: React.FC<PageProps> = () => {
                                 </Col>
                             </Row>
 
-                            <h3 className="h6 fw-bold text-muted mb-4 uppercase letter-spacing-1 border-bottom border-secondary pb-2">Brands</h3>
+                            <h3 className="h6 fw-bold text-muted mb-4 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
 
                             <Row className="g-4 mb-4">
                                 <Col xs={12} lg={4} className="d-flex flex-column gap-2">

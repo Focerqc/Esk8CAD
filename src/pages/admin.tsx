@@ -20,7 +20,6 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
     const imgSrc = Array.isArray(part.image_src) ? part.image_src[0] : part.image_src;
     const author = part.author || part.submitted_by || "Unknown";
     const [imgError, setImgError] = useState(false);
-    const [copied, setCopied] = useState(false);
 
     return (
         <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }}>
@@ -43,8 +42,8 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                     </div>
                     <Card.Body className="d-flex flex-column pt-3 px-3 pb-3">
                         <div className="d-flex justify-content-between align-items-start mb-1 gap-2">
-                            <Card.Title as="h5" className="mb-1 fw-bold text-white text-truncate" title={part.title}>{part.title}</Card.Title>
-                            <Button variant="outline-light" size="sm" className="px-2 py-0" onClick={onEdit} style={{ fontSize: '0.8rem' }}>Edit</Button>
+                            <Card.Title as="h5" className="mb-1 fw-bold text-white text-truncate" title={part.title} style={{ minWidth: 0 }}>{part.title}</Card.Title>
+                            <Button variant="outline-light" size="sm" className="px-2 py-0 flex-shrink-0" onClick={onEdit} style={{ fontSize: '0.8rem' }}>Edit</Button>
                         </div>
                         <Card.Subtitle className="mb-3 text-muted small">
                             By: <span className="text-light">{author}</span>
@@ -74,25 +73,9 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                                 </button>
                             )}
                             {part.dropbox_url && (
-                                <div className="d-flex gap-2 w-100 mb-2">
-                                    <a href={part.dropbox_url} target="_blank" rel="noreferrer" className="btn btn-outline-success btn-sm flex-grow-1 fw-bold m-0 position-relative z-index-1">
-                                        Mirror Link
-                                    </a>
-                                    <button
-                                        className="btn btn-outline-secondary btn-sm fw-bold px-3 position-relative z-index-1"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            navigator.clipboard.writeText(part.dropbox_url!);
-                                            setCopied(true);
-                                            setTimeout(() => setCopied(false), 2000);
-                                        }}
-                                        title="Copy Mirror Link"
-                                        style={{ whiteSpace: 'nowrap', transition: 'all 0.2s', ...(copied ? { backgroundColor: '#198754', color: 'white', borderColor: '#198754' } : {}) }}
-                                    >
-                                        {copied ? "Copied!" : "Copy"}
-                                    </button>
-                                </div>
+                                <a href={part.dropbox_url} target="_blank" rel="noreferrer" className="btn btn-outline-success btn-sm w-100 fw-bold m-0 position-relative z-index-1 mb-2">
+                                    Mirror
+                                </a>
                             )}
                             <Stack direction="horizontal" gap={2} className="w-100 justify-content-between">
                                 {actions}
@@ -797,7 +780,7 @@ export default function AdminPage(props: PageProps) {
                                                 </Col>
                                             </Row>
 
-                                            <h3 className="h6 fw-bold text-muted mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2">Brands</h3>
+                                            <h3 className="h6 fw-bold text-muted mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
 
                                             <Row className="g-4">
                                                 <Col xs={12} lg={4} className="d-flex flex-column gap-2">

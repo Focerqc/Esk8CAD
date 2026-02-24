@@ -86,7 +86,8 @@ export const useParts = (platform?: string, category?: string) => {
               fabrication_method: part.fabrication_method || [],
               specs: part.specs || {},
               created_at: part.created_at,
-              is_oem: part.is_oem || false
+              is_oem: part.is_oem || false,
+              dropbox_url: part.dropbox_url || undefined
             };
           });
 

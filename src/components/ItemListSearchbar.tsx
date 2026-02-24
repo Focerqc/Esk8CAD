@@ -20,6 +20,7 @@ const mapPartToSchema = (part: Part): PartSchema => {
         boardPlatform: (part.platform && part.platform.length > 0) ? part.platform[0] : "Misc",
         tags: [...(part.type_of_part || []), ...(part.fabrication_method || [])],
         externalUrl: part.external_url || undefined,
+        dropboxUrl: part.dropbox_url || undefined,
         // Optional dropbox link, etc for future use
     }
 }
