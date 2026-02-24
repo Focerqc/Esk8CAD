@@ -80,6 +80,8 @@ const partSchema = z.object({
     fabricationMethod: z.array(z.string()).min(1, "Select at least 1 fabrication method"),
     dropboxUrl: z.string().url("Must be a valid URL").or(z.literal("")),
     isOem: z.boolean(),
+    author: z.string().optional(),
+    submittedBy: z.string().optional(),
 })
 
 const formSchema = z.object({
@@ -122,6 +124,8 @@ const PartFormItem = ({
     const selectedPlatforms = partValues?.platform || []
     const selectedCategories = partValues?.typeOfPart || []
     const selectedFabMethods = partValues?.fabricationMethod || []
+    const authorValue = partValues?.author || ""
+    const submittedByValue = partValues?.submittedBy || ""
 
     const toggleArrayItem = (fieldPath: string, value: string, currentArray: string[], isSingle: boolean = false) => {
         if (currentArray.includes(value)) {
@@ -147,10 +151,29 @@ const PartFormItem = ({
             const data = (await response.json()) as any;
             if (data.status === 'success') {
                 const metadata = data.data;
-                if (!titleValue && metadata.title) setValue(`parts.${index}.title`, metadata.title, { shouldValidate: true });
+
+                // Title & Author Auto-Parse
+                if (!titleValue && metadata.title) {
+                    if (metadata.title.includes(" by ")) {
+                        const strParts = metadata.title.split(" by ");
+                        setValue(`parts.${index}.title`, strParts[0].trim(), { shouldValidate: true });
+                        if (!authorValue) {
+                            let parsedAuthor = strParts.slice(1).join(" by ").trim();
+                            if (parsedAuthor.includes(" | ")) {
+                                parsedAuthor = parsedAuthor.split(" | ")[0].trim();
+                            } else if (parsedAuthor.includes(" - ")) {
+                                parsedAuthor = parsedAuthor.split(" - ")[0].trim();
+                            }
+                            setValue(`parts.${index}.author`, parsedAuthor, { shouldValidate: true });
+                        }
+                    } else {
+                        setValue(`parts.${index}.title`, metadata.title, { shouldValidate: true });
+                    }
+                }
+
                 if (!imageSrcValue && (metadata.image?.url || metadata.logo?.url)) setValue(`parts.${index}.imageSrc`, metadata.image?.url || metadata.logo?.url, { shouldValidate: true });
                 if (!partValues?.externalUrl) setValue(`parts.${index}.externalUrl`, urlValue, { shouldValidate: true });
-                if (selectedCategories.length === 0) setValue(`parts.${index}.typeOfPart`, ["Miscellaneous"], { shouldValidate: true });
+                // We intentionally leave Categories entirely empty for manual selection.
             }
         } catch (e) {
             console.error("Scraper Error:", e);
@@ -283,6 +306,39 @@ const PartFormItem = ({
                                 )}
                             />
                         </Form.Group>
+
+                        {/* New Optional Text Fields */}
+                        <div className="d-flex gap-3 mb-4">
+                            <Form.Group className="flex-fill">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Model Author (Optional)</Form.Label>
+                                <Controller
+                                    control={control}
+                                    name={`parts.${index}.author`}
+                                    render={({ field }) => (
+                                        <Form.Control
+                                            {...field}
+                                            className={`input-contrast text-white p-3 shadow-sm border-secondary`}
+                                            placeholder="e.g. John Doe"
+                                        />
+                                    )}
+                                />
+                            </Form.Group>
+
+                            <Form.Group className="flex-fill">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Submitted By (Optional)</Form.Label>
+                                <Controller
+                                    control={control}
+                                    name={`parts.${index}.submittedBy`}
+                                    render={({ field }) => (
+                                        <Form.Control
+                                            {...field}
+                                            className={`input-contrast text-white p-3 shadow-sm border-secondary`}
+                                            placeholder="Your Name (Empty = Anonymous)"
+                                        />
+                                    )}
+                                />
+                            </Form.Group>
+                        </div>
                     </Col>
                     <Col md={5}>
                         <div className="bg-black rounded border border-secondary overflow-hidden position-relative shadow-inner" style={{ width: '100%', paddingBottom: '75%' }}>
@@ -300,18 +356,136 @@ const PartFormItem = ({
                     </div>
 
                     <div className={`mt-3 p-4 rounded bg-secondary border border-secondary shadow-sm ${!activeTab ? 'd-none' : ''}`}>
-                        <div className="d-flex flex-wrap gap-2">
-                            {(activeTab === 'platform' ? platforms : categories).map(opt => (
-                                <Badge
-                                    key={opt.id}
-                                    bg={(activeTab === 'platform' ? selectedPlatforms : selectedCategories).includes(opt.name) ? "primary" : "none"}
-                                    className="p-2 border border-light cursor-pointer shadow-sm"
-                                    onClick={() => toggleArrayItem(`parts.${index}.${activeTab === 'platform' ? 'platform' : 'typeOfPart'}`, opt.name, activeTab === 'platform' ? selectedPlatforms : selectedCategories, true)}
-                                >
-                                    {opt.name}
-                                </Badge>
-                            ))}
-                        </div>
+                        {activeTab === 'platform' && (() => {
+                            const pinnedStreet = platforms.find(p => p.name === "Street (DIY/Generic)");
+                            const pinnedOffroad = platforms.find(p => p.name === "Off-Road (DIY/Generic)");
+                            const pinnedMisc = platforms.find(p => p.name === "Misc");
+
+                            const others = platforms
+                                .filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc"].includes(p.name))
+                                .sort((a, b) => a.name.localeCompare(b.name));
+
+                            const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= '0' && first <= 'I'; });
+                            const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
+                            const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
+
+                            return (
+                                <>
+                                    <Row className="g-3 mb-4">
+                                        <Col xs={12} lg={4}>
+                                            {pinnedStreet && (
+                                                <Badge
+                                                    bg={selectedPlatforms.includes(pinnedStreet.name) ? "primary" : "none"}
+                                                    className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                    style={{ fontSize: "0.85rem" }}
+                                                    onClick={() => toggleArrayItem(`parts.${index}.platform`, pinnedStreet.name, selectedPlatforms, true)}
+                                                >
+                                                    {pinnedStreet.name}
+                                                </Badge>
+                                            )}
+                                        </Col>
+                                        <Col xs={12} lg={4}>
+                                            {pinnedOffroad && (
+                                                <Badge
+                                                    bg={selectedPlatforms.includes(pinnedOffroad.name) ? "primary" : "none"}
+                                                    className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                    style={{ fontSize: "0.85rem" }}
+                                                    onClick={() => toggleArrayItem(`parts.${index}.platform`, pinnedOffroad.name, selectedPlatforms, true)}
+                                                >
+                                                    {pinnedOffroad.name}
+                                                </Badge>
+                                            )}
+                                        </Col>
+                                        <Col xs={12} lg={4}>
+                                            {pinnedMisc && (
+                                                <Badge
+                                                    bg={selectedPlatforms.includes(pinnedMisc.name) ? "primary" : "none"}
+                                                    className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                    style={{ fontSize: "0.85rem" }}
+                                                    onClick={() => toggleArrayItem(`parts.${index}.platform`, pinnedMisc.name, selectedPlatforms, true)}
+                                                >
+                                                    {pinnedMisc.name}
+                                                </Badge>
+                                            )}
+                                        </Col>
+                                    </Row>
+
+                                    <h3 className="h6 fw-bold text-muted mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2">Brands</h3>
+
+                                    <Row className="g-4">
+                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                            <div className="text-center mb-1">
+                                                <span className="small fw-bold text-muted uppercase letter-spacing-1">A - I</span>
+                                            </div>
+                                            <div className="d-flex flex-wrap gap-2">
+                                                {group1.map(opt => (
+                                                    <Badge
+                                                        key={opt.id}
+                                                        bg={selectedPlatforms.includes(opt.name) ? "primary" : "none"}
+                                                        className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
+                                                        style={{ minWidth: "46%" }}
+                                                        onClick={() => toggleArrayItem(`parts.${index}.platform`, opt.name, selectedPlatforms, true)}
+                                                    >
+                                                        {opt.name}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </Col>
+                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                            <div className="text-center mb-1">
+                                                <span className="small fw-bold text-muted uppercase letter-spacing-1">J - R</span>
+                                            </div>
+                                            <div className="d-flex flex-wrap gap-2">
+                                                {group2.map(opt => (
+                                                    <Badge
+                                                        key={opt.id}
+                                                        bg={selectedPlatforms.includes(opt.name) ? "primary" : "none"}
+                                                        className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
+                                                        style={{ minWidth: "46%" }}
+                                                        onClick={() => toggleArrayItem(`parts.${index}.platform`, opt.name, selectedPlatforms, true)}
+                                                    >
+                                                        {opt.name}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </Col>
+                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                            <div className="text-center mb-1">
+                                                <span className="small fw-bold text-muted uppercase letter-spacing-1">S - Z</span>
+                                            </div>
+                                            <div className="d-flex flex-wrap gap-2">
+                                                {group3.map(opt => (
+                                                    <Badge
+                                                        key={opt.id}
+                                                        bg={selectedPlatforms.includes(opt.name) ? "primary" : "none"}
+                                                        className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
+                                                        style={{ minWidth: "46%" }}
+                                                        onClick={() => toggleArrayItem(`parts.${index}.platform`, opt.name, selectedPlatforms, true)}
+                                                    >
+                                                        {opt.name}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                </>
+                            );
+                        })()}
+
+                        {activeTab === 'tag' && (
+                            <div className="d-flex flex-wrap gap-2">
+                                {categories.map(opt => (
+                                    <Badge
+                                        key={opt.id}
+                                        bg={selectedCategories.includes(opt.name) ? "primary" : "none"}
+                                        className="p-2 border border-light cursor-pointer shadow-sm"
+                                        onClick={() => toggleArrayItem(`parts.${index}.typeOfPart`, opt.name, selectedCategories, true)}
+                                    >
+                                        {opt.name}
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <Controller
@@ -409,7 +583,9 @@ const SubmitPage: React.FC<PageProps> = () => {
                 fabricationMethod: ["3d Printed"],
                 typeOfPart: [],
                 dropboxUrl: "",
-                isOem: false
+                isOem: false,
+                author: "",
+                submittedBy: ""
             }]
         }
     })
@@ -477,6 +653,8 @@ const SubmitPage: React.FC<PageProps> = () => {
                 image_src: p.imageSrc || null,
                 dropbox_url: p.dropboxUrl || null,
                 is_oem: p.isOem,
+                author: p.author || null,
+                submitted_by: p.submittedBy && p.submittedBy.trim().length > 0 ? p.submittedBy.trim() : 'Anonymous',
                 status: 'pending' // Enforce rule for insertions directly here
             }));
 
@@ -496,7 +674,8 @@ const SubmitPage: React.FC<PageProps> = () => {
                 parts: [{
                     id: Math.random().toString(36).substr(2, 9),
                     url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
-                    fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false
+                    fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false,
+                    author: "", submittedBy: ""
                 }]
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -591,7 +770,8 @@ const SubmitPage: React.FC<PageProps> = () => {
                                                     onClick={() => append({
                                                         id: Math.random().toString(36).substr(2, 9),
                                                         url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
-                                                        fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false
+                                                        fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false,
+                                                        author: "", submittedBy: ""
                                                     })}
                                                     disabled={status === 'submitting'}
                                                 >

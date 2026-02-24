@@ -33,5 +33,9 @@ module.exports = {
                 path: `${__dirname}/src/data/parts`,
             },
         },
+        {
+            resolve: `gatsby-plugin-create-client-paths`,
+            options: { prefixes: [`/id/*`] },
+        },
     ]
 }

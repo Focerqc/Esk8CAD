@@ -1,35 +1,26 @@
 import React, { ChangeEvent, useEffect, useRef, useState, useMemo } from "react"
-import { Alert, Button, ButtonGroup, Form, Spinner, Stack, ToggleButton, Row } from "react-bootstrap"
+import { Alert, Button, ButtonGroup, Form, Stack, ToggleButton, Row, Col, Card } from "react-bootstrap"
 import { Link } from "gatsby"
 import { FaArrowRotateLeft } from "react-icons/fa6"
 import windowIsDefined from "../hooks/windowIsDefined"
 import CopyLinkButton from "./CopyLinkButton"
-import ItemCard from "./ItemCard"
+import PartCard, { PartSchema } from "./PartCard"
 import { useParts } from "../util/parts"
 import { Part } from "../lib/supabase"
 
 /**
- * Interface mapping to ensure ItemCard has access to ID even locally
+ * Maps Supabase `Part` exactly to the new `PartSchema` expected by `PartCard`
  */
-export interface MapItemData extends ItemData {
-    id?: any;
-}
-
-/**
- * Maps Supabase `Part` back to `ItemData` so `ItemCard` can render it
- */
-const mapPartToItemData = (part: Part): MapItemData => {
+const mapPartToSchema = (part: Part): PartSchema => {
     return {
-        // map id manually so card renderer can use it
-        id: part.id as any,
-        title: part.title,
-        typeOfPart: (part.type_of_part && part.type_of_part.length > 0 ? part.type_of_part : ["Miscellaneous"]) as PartType[],
-        fabricationMethod: (part.fabrication_method && part.fabrication_method.length > 0 ? part.fabrication_method : ["Other"]) as FabricationMethod[],
-        imageSrc: part.image_src || "",
-        platform: (part.platform && part.platform.length > 0 ? part.platform : ["Misc"]) as PlatformType[],
+        id: part.id ? String(part.id) : "Unknown",
+        title: part.title || "Untitled Part",
+        image_url: part.image_src || "",
+        author: "Unknown User", // Assuming author isn't in DB yet, fallback to "Unknown User"
+        boardPlatform: (part.platform && part.platform.length > 0) ? part.platform[0] : "Misc",
+        tags: [...(part.type_of_part || []), ...(part.fabrication_method || [])],
         externalUrl: part.external_url || undefined,
-        dropboxZipLastUpdated: "",
-        isOem: part.is_oem
+        // Optional dropbox link, etc for future use
     }
 }
 
@@ -68,6 +59,36 @@ const getPlatformFromURL = () => {
 
     return undefined;
 };
+
+// Skeleton Placeholder
+const SkeletonGrid = () => (
+    <Row className="my-5">
+        {Array.from({ length: 6 }).map((_, i) => (
+            <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: "280px" }} key={`skeleton-${i}`}>
+                <Card className="h-100 shadow-sm border-secondary bg-dark w-100 position-relative" aria-hidden="true">
+                    <div className="placeholder-glow" style={{ aspectRatio: "16 / 9", height: "auto", width: "100%" }}>
+                        <div className="placeholder w-100 h-100 bg-secondary" style={{ opacity: 0.2 }}></div>
+                    </div>
+                    <Card.Body className="d-flex flex-column">
+                        <div className="placeholder-glow mb-2">
+                            <span className="placeholder col-8 rounded bg-secondary"></span>
+                        </div>
+                        <div className="placeholder-glow mb-3">
+                            <span className="placeholder col-5 rounded bg-secondary"></span>
+                        </div>
+                        <div className="placeholder-glow mb-4">
+                            <span className="placeholder col-4 me-2 rounded bg-secondary"></span>
+                            <span className="placeholder col-3 rounded bg-secondary"></span>
+                        </div>
+                        <div className="mt-auto pt-3 border-top border-secondary placeholder-glow">
+                            <span className="placeholder col-12 btn btn-outline-info disabled" style={{ height: '31px' }}></span>
+                        </div>
+                    </Card.Body>
+                </Card>
+            </Col>
+        ))}
+    </Row>
+);
 
 /**
  * Creates a collection of elements for the
@@ -265,14 +286,8 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                 <hr />
             </div>
 
-            {/* Defensive Coding Data Display: Spinner, Error, Gallery Map */}
-            {isLoading && (
-                <div className="d-flex justify-content-center my-5">
-                    <Spinner animation="border" variant="info" role="status">
-                        <span className="visually-hidden">Loading...</span>
-                    </Spinner>
-                </div>
-            )}
+            {/* Defensive Coding Data Display: Skeleton Loading Grid, Error, Gallery Map */}
+            {isLoading && <SkeletonGrid />}
 
             {error && (
                 <Alert variant="danger" className="my-4">
@@ -287,7 +302,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
 
             {!isLoading && !error && (
                 <>
-                    <h2 id="itemListHeader" style={{ display: filteredParts.length > 0 ? "block" : "none" }}>Items From Cloud DB</h2>
+                    <h2 id="itemListHeader" className="mb-4" style={{ display: filteredParts.length > 0 ? "block" : "none" }}>Items From Cloud DB</h2>
                     <h2 id="noResultsText" style={{ display: filteredParts.length === 0 && parts.length > 0 ? "block" : "none", minHeight: "200px" }}>No results.</h2>
 
                     {/* Show a clear fallback message if filtering leaves zero rows */}
@@ -299,9 +314,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                     ) : (
                         <Row>
                             {filteredParts.map((part, index) => (
-                                <Link key={`part-link-${index}`} to={`/parts/${part.platform[0]}`} style={{ textDecoration: 'none', color: 'inherit', display: 'contents' }}>
-                                    {ItemCard(mapPartToItemData(part), index)}
-                                </Link>
+                                <PartCard key={`part-card-${part.id}-${index}`} part={mapPartToSchema(part)} index={index} />
                             ))}
                         </Row>
                     )}

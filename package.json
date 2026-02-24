@@ -29,6 +29,7 @@
         "fslightbox-react": "^2.0.0",
         "gatsby": "^3.15.0",
         "gatsby-link": "^3.15.0",
+        "gatsby-plugin-create-client-paths": "^3.15.0",
         "gatsby-plugin-image": "^1.15.0",
         "gatsby-plugin-robots-txt": "^1.7.1",
         "gatsby-plugin-sass": "^4.15.0",

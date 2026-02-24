@@ -11,6 +11,9 @@ export interface Part {
     specs?: Record<string, any>;
     status?: string;
     is_oem?: boolean;
+    author?: string;
+    submitted_by?: string;
+    dropbox_url?: string;
     created_at?: string;
 }
 
