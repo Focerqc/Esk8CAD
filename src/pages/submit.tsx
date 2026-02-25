@@ -11,6 +11,7 @@ import * as z from "zod"
 import SiteFooter from "../components/SiteFooter"
 import SiteNavbar from "../components/SiteNavbar"
 import ClientOnly from "../components/ClientOnly"
+import HardwareFields from "../components/Forms/HardwareFields"
 import { getSupabaseClient } from '../lib/supabase'
 
 // --- Error Boundary ---
@@ -82,6 +83,9 @@ const partSchema = z.object({
     isOem: z.boolean(),
     author: z.string().optional(),
     submittedBy: z.string().optional(),
+    releaseYear: z.number().nullable().optional(),
+    boardModel: z.string().nullable().optional(),
+    needsModelReview: z.boolean().optional(),
 })
 
 const formSchema = z.object({
@@ -126,6 +130,9 @@ const PartFormItem = ({
     const selectedFabMethods = partValues?.fabricationMethod || []
     const authorValue = partValues?.author || ""
     const submittedByValue = partValues?.submittedBy || ""
+    const releaseYearValue = partValues?.releaseYear || null
+    const boardModelValue = partValues?.boardModel || null
+    const needsModelReviewValue = partValues?.needsModelReview || false
 
     const toggleArrayItem = (fieldPath: string, value: string, currentArray: string[], isSingle: boolean = false) => {
         if (currentArray.includes(value)) {
@@ -554,6 +561,16 @@ const PartFormItem = ({
                         </Form.Group>
                     </Col>
                 </Row>
+
+                <HardwareFields
+                    platform={selectedPlatforms}
+                    boardModel={boardModelValue}
+                    releaseYear={releaseYearValue}
+                    needsModelReview={needsModelReviewValue}
+                    onChangeModel={(m) => setValue(`parts.${index}.boardModel`, m, { shouldValidate: true })}
+                    onChangeYear={(y) => setValue(`parts.${index}.releaseYear`, y, { shouldValidate: true })}
+                    onChangeNeedsReview={(b) => setValue(`parts.${index}.needsModelReview`, b, { shouldValidate: true })}
+                />
             </Card.Body>
         </Card>
     )
@@ -585,7 +602,10 @@ const SubmitPage: React.FC<PageProps> = () => {
                 dropboxUrl: "",
                 isOem: false,
                 author: "",
-                submittedBy: ""
+                submittedBy: "",
+                releaseYear: null,
+                boardModel: null,
+                needsModelReview: false
             }]
         }
     })
@@ -655,6 +675,9 @@ const SubmitPage: React.FC<PageProps> = () => {
                 is_oem: p.isOem,
                 author: p.author || null,
                 submitted_by: p.submittedBy && p.submittedBy.trim().length > 0 ? p.submittedBy.trim() : 'Anonymous',
+                release_year: p.releaseYear || null,
+                board_model: p.boardModel || null,
+                needs_model_review: p.needsModelReview || false,
                 status: 'pending' // Enforce rule for insertions directly here
             }));
 
@@ -675,7 +698,7 @@ const SubmitPage: React.FC<PageProps> = () => {
                     id: Math.random().toString(36).substr(2, 9),
                     url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
                     fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false,
-                    author: "", submittedBy: ""
+                    author: "", submittedBy: "", releaseYear: null, boardModel: null, needsModelReview: false
                 }]
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -771,7 +794,7 @@ const SubmitPage: React.FC<PageProps> = () => {
                                                         id: Math.random().toString(36).substr(2, 9),
                                                         url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
                                                         fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false,
-                                                        author: "", submittedBy: ""
+                                                        author: "", submittedBy: "", releaseYear: null, boardModel: null, needsModelReview: false
                                                     })}
                                                     disabled={status === 'submitting'}
                                                 >

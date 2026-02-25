@@ -14,6 +14,9 @@ export interface Part {
     author?: string;
     submitted_by?: string;
     dropbox_url?: string;
+    release_year?: number | null;
+    board_model?: string | null;
+    needs_model_review?: boolean;
     created_at?: string;
 }
 

@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from "react"
 import { Container, Card, Form, Button, Alert, Spinner, Tabs, Tab, Row, Col, Badge, Stack, InputGroup, Modal } from "react-bootstrap"
 import SiteNavbar from "../components/SiteNavbar"
 import SiteFooter from "../components/SiteFooter"
+import HardwareFields from "../components/Forms/HardwareFields"
 import { getSupabaseClient, Part } from "../lib/supabase"
 import { SupabaseClient, User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 
@@ -42,7 +43,10 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                     </div>
                     <Card.Body className="d-flex flex-column pt-3 px-3 pb-3">
                         <div className="d-flex justify-content-between align-items-start mb-1 gap-2">
-                            <Card.Title as="h5" className="mb-1 fw-bold text-white text-truncate" title={part.title} style={{ minWidth: 0 }}>{part.title}</Card.Title>
+                            <Card.Title as="h5" className="mb-1 fw-bold text-white text-truncate" title={part.title} style={{ minWidth: 0 }}>
+                                {part.needs_model_review && <span className="me-2" title="Needs Model Review">🚩</span>}
+                                {part.title}
+                            </Card.Title>
                             <Button variant="outline-light" size="sm" className="px-2 py-0 flex-shrink-0" onClick={onEdit} style={{ fontSize: '0.8rem' }}>Edit</Button>
                         </div>
                         <Card.Subtitle className="mb-3 text-muted small">
@@ -112,6 +116,9 @@ export default function AdminPage(props: PageProps) {
     const [editPlatformName, setEditPlatformName] = useState("");
     const [platformDeleteConfirm, setPlatformDeleteConfirm] = useState(false);
 
+    const [editBoardModelOld, setEditBoardModelOld] = useState<string>("");
+    const [editBoardModelNew, setEditBoardModelNew] = useState<string>("");
+
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -133,6 +140,9 @@ export default function AdminPage(props: PageProps) {
                 fabrication_method: editingPart.fabrication_method || [],
                 is_oem: editingPart.is_oem || false,
                 dropbox_url: editingPart.dropbox_url || undefined,
+                release_year: editingPart.release_year || null,
+                board_model: editingPart.board_model || null,
+                needs_model_review: editingPart.needs_model_review || false,
             };
             const { error: sbError } = await supabase.from('parts').update(payload).eq('id', editingPart.id);
             if (sbError) throw sbError;
@@ -167,6 +177,14 @@ export default function AdminPage(props: PageProps) {
             urlMap.get(normalized)!.push(p);
         });
         return Array.from(urlMap.values()).filter(group => group.length > 1);
+    }, [parts]);
+
+    const uniqueBoardModels = useMemo(() => {
+        const models = new Set<string>();
+        parts.forEach(p => {
+            if (p.board_model) models.add(p.board_model);
+        });
+        return Array.from(models).sort((a, b) => a.localeCompare(b));
     }, [parts]);
 
     // Initial mount and client library check
@@ -393,6 +411,28 @@ export default function AdminPage(props: PageProps) {
         } catch (err: any) {
             setError('Failed to delete platform: ' + (err.message || String(err)));
             fetchData();
+        }
+    };
+
+    const handleUpdateBoardModel = async () => {
+        if (!editBoardModelOld || !supabase) return;
+        setIsLoading(true);
+        try {
+            const newValue = editBoardModelNew.trim() || null;
+            const { error: sbError } = await supabase
+                .from('parts')
+                .update({ board_model: newValue, needs_model_review: false })
+                .eq('board_model', editBoardModelOld);
+
+            if (sbError) throw sbError;
+
+            setParts(prev => prev.map(p => p.board_model === editBoardModelOld ? { ...p, board_model: newValue, needs_model_review: false } : p));
+            setEditBoardModelOld("");
+            setEditBoardModelNew("");
+        } catch (err: any) {
+            setError('Failed to update board model: ' + (err.message || String(err)));
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -678,6 +718,62 @@ export default function AdminPage(props: PageProps) {
                         </div>
                     </Tab>
 
+                    {/* 6. Manage Board Models */}
+                    <Tab eventKey="models" title="6. Manage Board Models">
+                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
+                            <h5 className="text-info fw-bold mb-3">Hardware Context (Board Models)</h5>
+                            <p className="text-muted small mb-4">Board models are dynamic tags attached directly to parts. Editing a model here will update it across all parts.</p>
+
+                            <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
+                                <div className="d-flex flex-wrap gap-2">
+                                    {uniqueBoardModels.map(model => (
+                                        <Badge
+                                            key={model}
+                                            pill
+                                            bg={editBoardModelOld === model ? "primary" : "secondary"}
+                                            className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${editBoardModelOld === model ? 'border-primary' : 'border-dark'}`}
+                                            onClick={() => { setEditBoardModelOld(model); setEditBoardModelNew(model); }}
+                                        >
+                                            {model}
+                                            {parts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
+                                        </Badge>
+                                    ))}
+                                    {uniqueBoardModels.length === 0 && <span className="text-muted small p-2">No board models found in the registry.</span>}
+                                </div>
+                            </div>
+
+                            {editBoardModelOld && (
+                                <div className="mb-4 p-4 bg-secondary border border-secondary rounded shadow-sm">
+                                    <h6 className="text-info fw-bold mb-3">Modify Model Name: <span className="text-white">{editBoardModelOld}</span></h6>
+
+                                    <div className="d-flex flex-column gap-3">
+                                        <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
+                                            <Form.Control
+                                                type="text"
+                                                className="input-contrast p-3 border-0"
+                                                value={editBoardModelNew}
+                                                onChange={e => setEditBoardModelNew(e.target.value)}
+                                                onKeyDown={e => e.key === 'Enter' && handleUpdateBoardModel()}
+                                                placeholder="Clear this text to remove model from all parts"
+                                            />
+                                            <Button
+                                                variant="success"
+                                                className="fw-bold px-4 border-0"
+                                                onClick={handleUpdateBoardModel}
+                                                disabled={editBoardModelNew === editBoardModelOld}
+                                            >
+                                                Apply to All Parts
+                                            </Button>
+                                        </InputGroup>
+                                        <div className="d-flex justify-content-between">
+                                            <Button variant="secondary" size="sm" className="fw-bold" onClick={() => { setEditBoardModelOld(""); setEditBoardModelNew(""); }}>Cancel Edit</Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </Tab>
+
                 </Tabs>
 
                 {editingPart && (
@@ -853,6 +949,16 @@ export default function AdminPage(props: PageProps) {
                                     <Form.Check type="checkbox" id="edit-oem" label="OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-3" />
                                 </Col>
                             </Row>
+
+                            <HardwareFields
+                                platform={editingPart.platform || []}
+                                boardModel={editingPart.board_model || null}
+                                releaseYear={editingPart.release_year || null}
+                                needsModelReview={editingPart.needs_model_review || false}
+                                onChangeModel={(m) => setEditingPart({ ...editingPart, board_model: m })}
+                                onChangeYear={(y) => setEditingPart({ ...editingPart, release_year: y })}
+                                onChangeNeedsReview={(b) => setEditingPart({ ...editingPart, needs_model_review: b })}
+                            />
                         </Modal.Body>
                         <Modal.Footer className="bg-dark border-secondary p-4">
                             <Button variant="secondary" onClick={() => setEditingPart(null)} className="px-4">Cancel</Button>
