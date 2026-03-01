@@ -191,19 +191,21 @@ export default function AdminPage(props: PageProps) {
         return Array.from(urlMap.values()).filter(group => group.length > 1);
     }, [parts]);
 
+    const allActiveParts = useMemo(() => [...parts, ...hiddenParts], [parts, hiddenParts]);
+
     const uniqueBoardModels = useMemo(() => {
         const models = new Set<string>();
-        parts.forEach(p => {
+        allActiveParts.forEach(p => {
             if (p.board_model) models.add(p.board_model);
         });
         return Array.from(models).sort((a, b) => a.localeCompare(b));
-    }, [parts]);
+    }, [allActiveParts]);
 
     const groupedBoardModels = useMemo(() => {
         const groups: Record<string, Set<string>> = {};
         const orphans: Set<string> = new Set();
 
-        parts.forEach(p => {
+        allActiveParts.forEach(p => {
             if (!p.board_model) return;
             const model = p.board_model;
 
@@ -1220,7 +1222,7 @@ export default function AdminPage(props: PageProps) {
                                                         onClick={() => { setEditBoardModelOld(model); setEditBoardModelNew(model); }}
                                                     >
                                                         {model}
-                                                        {parts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
+                                                        {allActiveParts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -1241,7 +1243,7 @@ export default function AdminPage(props: PageProps) {
                                                         onClick={() => { setEditBoardModelOld(model); setEditBoardModelNew(model); }}
                                                     >
                                                         {model}
-                                                        {parts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
+                                                        {allActiveParts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
                                                     </Badge>
                                                 ))}
                                             </div>

@@ -40,7 +40,8 @@ export function useBrandHardware(platformSelected: string[]) {
                 const { data, error: fetchError } = await client
                     .from('parts')
                     .select('board_model, release_year')
-                    .contains('platform', [platform]);
+                    .contains('platform', [platform])
+                    .is('deleted_at', null);
 
                 if (fetchError) throw fetchError;
 
