@@ -6,6 +6,8 @@ import SiteFooter from "../components/SiteFooter"
 import SiteMetaData from "../components/SiteMetaData"
 import SiteNavbar from "../components/SiteNavbar"
 import ClientOnly from "../components/ClientOnly"
+import { getSupabaseClient } from "../lib/supabase"
+import { useState, useEffect } from "react"
 
 const platformsRaw = [
     { label: "Street (DIY/Generic)", href: "/parts/street" },
@@ -37,12 +39,39 @@ const platformsRaw = [
 ];
 
 const Page: React.FC<PageProps> = () => {
-    // Platform separation logic
-    const pinnedStreet = platformsRaw.find(p => p.label === "Street (DIY/Generic)");
-    const pinnedOffroad = platformsRaw.find(p => p.label === "Off-Road (DIY/Generic)");
-    const pinnedMisc = platformsRaw.find(p => p.label === "Misc");
+    const [allPlatforms, setAllPlatforms] = useState<{ label: string, href: string }[]>(platformsRaw);
 
-    const others = platformsRaw
+    useEffect(() => {
+        let isMounted = true;
+        const fetchPlatforms = async () => {
+            try {
+                const client = getSupabaseClient();
+                if (!client) return;
+                const { data } = await client.from('board_platforms').select('name').order('name');
+                if (data && data.length > 0 && isMounted) {
+                    const dynamicPlatforms = data.map(p => {
+                        const existingStatic = platformsRaw.find(dp => dp.label === p.name);
+                        return {
+                            label: p.name,
+                            href: existingStatic ? existingStatic.href : `/parts/?platform=${encodeURIComponent(p.name)}`
+                        };
+                    });
+                    setAllPlatforms(dynamicPlatforms);
+                }
+            } catch (e) {
+                console.error("Failed to dynamically load platforms", e);
+            }
+        };
+        fetchPlatforms();
+        return () => { isMounted = false; };
+    }, []);
+
+    // Platform separation logic
+    const pinnedStreet = allPlatforms.find(p => p.label === "Street (DIY/Generic)");
+    const pinnedOffroad = allPlatforms.find(p => p.label === "Off-Road (DIY/Generic)");
+    const pinnedMisc = allPlatforms.find(p => p.label === "Misc");
+
+    const others = allPlatforms
         .filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc"].includes(p.label))
         .sort((a, b) => a.label.localeCompare(b.label));
 

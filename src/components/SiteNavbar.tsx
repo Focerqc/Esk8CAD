@@ -9,7 +9,40 @@ import SearchModalSearchbar from "./SearchModalSearchbar"
 import allParts, { useParts } from "../util/parts"
 import allResources from "../util/resources"
 import usePartRegistry from "../hooks/usePartRegistry"
-import { Part } from "../lib/supabase"
+import { Part, getSupabaseClient } from "../lib/supabase"
+import { useEffect } from "react"
+
+type NavPlatformDef = { label: string; href: string; divider?: never } | { divider: true; label?: never; href?: never };
+
+const DEFAULT_PLATFORMS: NavPlatformDef[] = [
+    { label: "Street (DIY/Generic)", href: "/parts/street" },
+    { label: "Off-Road (DIY/Generic)", href: "/parts/offroad" },
+    { label: "Misc", href: "/parts/misc" },
+    { divider: true },
+    { label: "3D Servisas", href: "/parts/3dservisas" },
+    { label: "Acedeck", href: "/parts/acedeck" },
+    { label: "Apex Boards", href: "/parts/apex" },
+    { label: "Backfire", href: "/parts/backfire" },
+    { label: "Bioboards", href: "/parts/bioboards" },
+    { label: "Boardnamics", href: "/parts/boardnamics" },
+    { label: "Defiant Board Society", href: "/parts/defiant" },
+    { label: "Evolve", href: "/parts/evolve" },
+    { label: "Exway", href: "/parts/exway" },
+    { label: "Fluxmotion", href: "/parts/fluxmotion" },
+    { label: "Hoyt St", href: "/parts/hoyt" },
+    { label: "Lacroix Boards", href: "/parts/lacroix" },
+    { label: "Linnpower", href: "/parts/linnpower" },
+    { label: "MBoards", href: "/parts/mboards" },
+    { label: "MBS", href: "/parts/mbs" },
+    { label: "Meepo", href: "/parts/meepo" },
+    { label: "Newbee", href: "/parts/newbee" },
+    { label: "Propel", href: "/parts/propel" },
+    { label: "Radium Performance", href: "/parts/radium" },
+    { label: "Stooge Raceboards", href: "/parts/stooge" },
+    { label: "Summerboard", href: "/parts/summerboard" },
+    { label: "Trampa Boards", href: "/parts/trampa" },
+    { label: "Wowgo", href: "/parts/wowgo" }
+];
 
 type NavbarProps = {
     isHomepage?: boolean
@@ -21,7 +54,7 @@ const mapPartToItemData = (part: Part): ItemData => {
         title: part.title,
         typeOfPart: (part.type_of_part && part.type_of_part.length > 0 ? part.type_of_part : ["Miscellaneous"]) as PartType[],
         fabricationMethod: (part.fabrication_method && part.fabrication_method.length > 0 ? part.fabrication_method : ["Other"]) as FabricationMethod[],
-        imageSrc: part.image_src || "",
+        imageSrc: (Array.isArray(part.image_src) ? part.image_src[0] : part.image_src) || "",
         platform: (part.platform && part.platform.length > 0 ? part.platform : ["Misc"]) as PlatformType[],
         externalUrl: part.external_url || undefined,
         dropboxZipLastUpdated: "",
@@ -40,6 +73,40 @@ export default ({ isHomepage }: NavbarProps) => {
     const { parts: cloudParts } = useParts(); // Fetch live database parts
     const [showModal, setShowModal] = useState(false)
     const [isSpinning, setIsSpinning] = useState(false)
+
+    // Dynamic Navbar Platforms
+    const [navPlatforms, setNavPlatforms] = useState<typeof DEFAULT_PLATFORMS>(DEFAULT_PLATFORMS)
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchPlatforms = async () => {
+            try {
+                const client = getSupabaseClient();
+                if (!client) return;
+                const { data } = await client.from('board_platforms').select('name').order('name');
+                if (data && data.length > 0 && isMounted) {
+                    const dynamicPlatforms: typeof DEFAULT_PLATFORMS = [];
+                    // Keep pinned manual items at top
+                    dynamicPlatforms.push(DEFAULT_PLATFORMS[0], DEFAULT_PLATFORMS[1], DEFAULT_PLATFORMS[2], DEFAULT_PLATFORMS[3]);
+
+                    const alphabetic = data.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc"].includes(p.name));
+
+                    alphabetic.forEach(p => {
+                        const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
+                        dynamicPlatforms.push({
+                            label: p.name,
+                            href: existingStatic ? existingStatic.href : `/parts/?platform=${encodeURIComponent(p.name)}`
+                        } as NavPlatformDef);
+                    });
+                    setNavPlatforms(dynamicPlatforms);
+                }
+            } catch (e) {
+                console.error("Failed to load nav platforms dynamically", e);
+            }
+        };
+        fetchPlatforms();
+        return () => { isMounted = false; };
+    }, []);
 
     // Deduplicate parts by title (since JSON to Supabase migration could duplicate them)
     const uniquePartsMap = new Map<string, ItemData>();
@@ -154,33 +221,19 @@ export default ({ isHomepage }: NavbarProps) => {
                         <Nav.Link as={Link} to="/submit">Submit</Nav.Link>
                         <Nav.Link as={Link} to="/oem" style={{ color: '#a855f7', fontWeight: 'bold' }}>OEM</Nav.Link>
                         <NavDropdown title="Board Platforms" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-parts-dropdown">
-                            <NavDropdown.Item as={Link} to="/parts/street">Street (DIY/Generic)</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/offroad">Off-Road (DIY/Generic)</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/misc">Misc</NavDropdown.Item>
-                            <NavDropdown.Divider />
-                            <NavDropdown.Item as={Link} to="/parts/3dservisas">3D Servisas</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/acedeck">Acedeck</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/apex">Apex Boards</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/backfire">Backfire</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/bioboards">Bioboards</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/boardnamics">Boardnamics</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/defiant">Defiant Board Society</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/evolve">Evolve</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/exway">Exway</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/fluxmotion">Fluxmotion</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/hoyt">Hoyt St</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/lacroix">Lacroix Boards</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/linnpower">Linnpower</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/mboards">MBoards</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/mbs">MBS</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/meepo">Meepo</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/newbee">Newbee</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/propel">Propel</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/radium">Radium Performance</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/stooge">Stooge Raceboards</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/summerboard">Summerboard</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/trampa">Trampa Boards</NavDropdown.Item>
-                            <NavDropdown.Item as={Link} to="/parts/wowgo">Wowgo</NavDropdown.Item>
+                            {navPlatforms.map((p, index) => {
+                                if (p.divider) return <NavDropdown.Divider key={`nav-divider-${index}`} />;
+                                const isDynamic = p.href?.startsWith('/parts/?');
+
+                                if (isDynamic) {
+                                    return <NavDropdown.Item key={p.label} href={p.href}>{p.label}</NavDropdown.Item>;
+                                }
+                                return (
+                                    <NavDropdown.Item key={p.label} as={Link} to={p.href!}>
+                                        {p.label}
+                                    </NavDropdown.Item>
+                                );
+                            })}
                         </NavDropdown>
                         <NavDropdown title="Resources" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-resources-dropdown">
                             <NavDropdown.Item href="/resources/applications" target="_self">Applications</NavDropdown.Item>

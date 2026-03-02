@@ -1,12 +1,13 @@
-import React from "react"
+import React, { useState, useEffect } from "react"
 import { Button } from "react-bootstrap"
+import { getSupabaseClient } from "../lib/supabase"
 
 /**
  * PartTypesLinks: Displays all available board platforms/brands.
- * Updated to include the full list of 14 platforms used in the submission form.
+ * Updated to dynamically resolve platforms from the database.
  */
 const PartTypesLinks: React.FC = () => {
-    const platforms = [
+    const DEFAULT_PLATFORMS = [
         { label: "Street (DIY/Generic)", href: "/parts/street" },
         { label: "Off-Road (DIY/Generic)", href: "/parts/offroad" },
         { label: "Misc", href: "/parts/misc" },
@@ -33,13 +34,40 @@ const PartTypesLinks: React.FC = () => {
         { label: "Summerboard", href: "/parts/summerboard" },
         { label: "Trampa Boards", href: "/parts/trampa" },
         { label: "Wowgo", href: "/parts/wowgo" }
-    ]
+    ];
+
+    const [platforms, setPlatforms] = useState<{ label: string, href: string }[]>(DEFAULT_PLATFORMS)
+
+    useEffect(() => {
+        let isMounted = true;
+        const fetchPlatforms = async () => {
+            try {
+                const client = getSupabaseClient();
+                if (!client) return;
+                const { data } = await client.from('board_platforms').select('name').order('name');
+                if (data && data.length > 0 && isMounted) {
+                    const dynamicPlatforms = data.map(p => {
+                        const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
+                        return {
+                            label: p.name,
+                            href: existingStatic ? existingStatic.href : `/parts/?platform=${encodeURIComponent(p.name)}`
+                        };
+                    });
+                    setPlatforms(dynamicPlatforms);
+                }
+            } catch (e) {
+                console.error("Failed to dynamically load platforms", e);
+            }
+        };
+        fetchPlatforms();
+        return () => { isMounted = false; };
+    }, []);
 
     return (
         <div className="d-flex flex-wrap gap-3 mb-4" style={{ overflow: 'visible' }}>
             {platforms.map(platform => (
                 <Button
-                    key={platform.href}
+                    key={platform.label}
                     variant="outline-info"
                     href={platform.href}
                     className="px-4 py-2 border-2 fw-bold"
