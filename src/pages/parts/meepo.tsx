@@ -1,6 +1,6 @@
 import { type PageProps } from "gatsby"
 import React, { useEffect, useState, useMemo } from "react"
-import { Container, Row, Col, Badge, Button, Alert, Spinner, Card } from "react-bootstrap"
+import { Container, Row, Col, Button, Alert, Card } from "react-bootstrap"
 import SiteFooter from "../../components/SiteFooter"
 import SiteMetaData from "../../components/SiteMetaData"
 import SiteNavbar from "../../components/SiteNavbar"
@@ -8,230 +8,290 @@ import PartCard, { PartSchema } from "../../components/PartCard"
 import { getSupabaseClient } from "../../utils/supabaseClient"
 import "../../scss/pages/items.scss"
 
-interface BoardPlatform {
+// Types
+interface Model {
     id: number;
     name: string;
-    brand: string;
+    brand_id: number;
+}
+
+interface Category {
+    id: number;
+    name: string;
 }
 
 interface PartWithPlatform {
     id: string | number;
     title: string;
     image_src: string;
-    type_of_part?: string[];
-    fabrication_method?: string[];
+    type_of_part?: string[]; // Legacy
+    fabrication_method?: string[]; // Legacy
     external_url?: string;
     dropbox_url?: string;
-    platform_id: number;
-    board_platforms?: BoardPlatform;
-    platform?: string[];
+    platform?: string[]; // Legacy
+    author?: string; // Legacy
+
+    // Relational Additions (Read-Only)
+    model_id?: number | null;
+    category_id?: number | null;
+    models?: Model;
+    categories?: Category;
 }
 
+// Map the relational payload cleanly into the schema expected by the legacy PartCard
 const mapPartToSchema = (part: PartWithPlatform): PartSchema => {
+    const tags = new Set<string>();
+    if (part.categories?.name) tags.add(part.categories.name);
+    if (part.type_of_part) part.type_of_part.forEach(t => tags.add(t));
+    if (part.fabrication_method) part.fabrication_method.forEach(t => tags.add(t));
+
     return {
         id: part.id ? String(part.id) : "Unknown",
         title: part.title || "Untitled Part",
         image_url: part.image_src || "",
-        author: "Unknown User",
-        boardPlatform: part.board_platforms?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "Meepo"),
-        tags: [...(part.type_of_part || []), ...(part.fabrication_method || [])],
+        author: part.author || "Unknown User",
+        boardPlatform: part.models?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "Meepo"),
+        tags: Array.from(tags),
         externalUrl: part.external_url || undefined,
         dropboxUrl: part.dropbox_url || undefined,
     }
 }
 
 const Page: React.FC<PageProps> = () => {
-    const [platforms, setPlatforms] = useState<BoardPlatform[]>([])
-    const [platformsLoading, setPlatformsLoading] = useState(true)
-    const [platformsError, setPlatformsError] = useState<string | null>(null)
-
+    // Data State
+    const [models, setModels] = useState<Model[]>([])
+    const [categories, setCategories] = useState<Category[]>([])
     const [parts, setParts] = useState<PartWithPlatform[]>([])
-    const [partsLoading, setPartsLoading] = useState(true)
-    const [partsError, setPartsError] = useState<string | null>(null)
 
-    const [selectedPlatformId, setSelectedPlatformId] = useState<number | null>(null)
+    // UI State
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [selectedModelId, setSelectedModelId] = useState<number | null>(null)
+    const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null)
 
     useEffect(() => {
-        const fetchMeepoData = async () => {
+        let isMounted = true;
+
+        const fetchRelationalData = async () => {
             const client = getSupabaseClient();
 
             if (!client) {
-                const errMsg = "Database client unavailable - SSR or missing env.";
-                setPlatformsError(errMsg);
-                setPartsError(errMsg);
-                setPlatformsLoading(false);
-                setPartsLoading(false);
+                if (isMounted) {
+                    setError("Database client unavailable - SSR or missing env.");
+                    setLoading(false);
+                }
                 return;
             }
 
-            // Fetch platforms where brand matches 'meepo'
             try {
-                const { data: pData, error: pError } = await client
-                    .from('board_platforms')
+                // 1) Find the specific brand_id for "Meepo"
+                const { data: brandData, error: brandError } = await client
+                    .from('brands')
+                    .select('id')
+                    .ilike('name', 'meepo')
+                    .maybeSingle();
+
+                if (brandError) throw brandError;
+
+                const meepoBrandId = brandData?.id;
+
+                if (!meepoBrandId) {
+                    throw new Error("Brand 'meepo' not found in the relational DB.");
+                }
+
+                // 2) Fetch Models assigned to Meepo
+                const { data: modelsData, error: modelsError } = await client
+                    .from('models')
                     .select('*')
-                    .ilike('brand', '%meepo%')
+                    .eq('brand_id', meepoBrandId)
                     .order('name');
 
-                if (pError) throw pError;
-                setPlatforms(pData || []);
-            } catch (err: any) {
-                console.error("Platforms fetch error:", err);
-                setPlatformsError(err.message || "Failed to load board models - Retrying recommended.");
-            } finally {
-                setPlatformsLoading(false);
-            }
+                if (modelsError) throw modelsError;
+                if (isMounted) setModels(modelsData || []);
 
-            // Fetch parts with an inner join to board_platforms for matching brand
-            try {
+                // 3) Fetch Global Categories
+                const { data: catsData, error: catsError } = await client
+                    .from('categories')
+                    .select('*')
+                    .order('name');
+
+                if (catsError) throw catsError;
+                if (isMounted) setCategories(catsData || []);
+
+                // 4) Fetch Parts configured via INNER join to Models (filtered for Meepo model items)
                 const { data: partsData, error: partsError } = await client
                     .from('parts')
-                    .select('*, board_platforms!inner(*)')
-                    .ilike('board_platforms.brand', '%meepo%');
+                    .select('*, models!inner(*), categories(*)')
+                    .eq('models.brand_id', meepoBrandId);
 
                 if (partsError) throw partsError;
-                setParts(partsData || []);
+                if (isMounted) setParts(partsData || []);
+
             } catch (err: any) {
-                console.error("Parts fetch error:", err);
-                setPartsError(err.message || "Failed to load parts data - Database connection timed out?");
+                console.error("Relational query error:", err);
+                if (isMounted) setError(err.message || "Failed to load relational dashboard.");
             } finally {
-                setPartsLoading(false);
+                if (isMounted) setLoading(false);
             }
         };
 
-        fetchMeepoData();
+        fetchRelationalData();
+
+        return () => { isMounted = false; };
     }, []);
 
-    // Filter displayed parts based on selected platform button
+    // Filter parts logic based on the user clicking Model and/or Category buttons
     const displayedParts = useMemo(() => {
-        if (selectedPlatformId === null) return parts;
-        return parts.filter(p => p.platform_id === selectedPlatformId || p.board_platforms?.id === selectedPlatformId);
-    }, [parts, selectedPlatformId]);
+        return parts.filter(p => {
+            const matchModel = selectedModelId === null || p.models?.id === selectedModelId || p.model_id === selectedModelId;
+            const matchCategory = selectedCategoryId === null || p.categories?.id === selectedCategoryId || p.category_id === selectedCategoryId;
+            return matchModel && matchCategory;
+        });
+    }, [parts, selectedModelId, selectedCategoryId]);
 
     return (
         <div className="bg-black text-light min-vh-100 d-flex flex-column pb-5 page-items">
-            <SiteMetaData
-                title="Meepo Parts | ESK8CAD.COM"
-                description="Open source or otherwise aftermarket parts for the Meepo platform"
-            />
+            <SiteMetaData title="Meepo Parts | ESK8CAD.COM" description="Open source aftermarket parts for the Meepo platform" />
             <SiteNavbar isHomepage={false} />
 
             <main className="flex-grow-1">
                 <Container className="my-5">
-                    {/* Top Split Header: Info on Left / Empty on Right */}
-                    <Row className="mb-5 border-bottom border-secondary pb-4 align-items-center">
-                        <Col xs={12} md={8} className="text-start">
-                            <div className="d-flex align-items-center gap-3 mb-2 flex-wrap">
-                                <h1 className="display-4 fw-bold uppercase letter-spacing-1 mb-0 text-white">
-                                    Meepo <span style={{ color: '#0dcaf0' }}>Parts</span>
-                                </h1>
-                                <Badge bg="primary" className="fw-bold px-3 py-2 text-uppercase fs-6">OEM & Aftermarket</Badge>
-                            </div>
-                            <p className="lead text-muted opacity-75 mb-4" style={{ maxWidth: "600px" }}>
+
+                    {/* TOP HEADER ROW - Strict 9-Column Left / 3-Column Right Split */}
+                    <Row className="mb-5 border-bottom border-secondary pb-4">
+                        <Col xs={12} md={9} className="text-start">
+
+                            {/* Brand Header & Un-Squished Description */}
+                            <h2 className="display-4 fw-bold uppercase letter-spacing-1 mb-2 text-white">
+                                MEEPO <span style={{ color: '#0dcaf0' }}>PARTS</span>
+                            </h2>
+                            <p className="lead text-muted opacity-75 mb-4 w-100">
                                 Open source or otherwise aftermarket parts compatible with the Meepo platform.
-                                Select a specific board model below to filter available components.
+                                Select a specific board model or category below to filter available components.
                             </p>
 
-                            {/* Relational Board Model Filters */}
-                            <div className="mt-4">
-                                <h5 className="text-uppercase text-secondary mb-3 fs-6 fw-bold spacing-1">Filter by Model</h5>
-                                {platformsLoading ? (
-                                    <div className="d-flex align-items-center gap-2 text-muted">
-                                        <Spinner animation="border" size="sm" />
-                                        <span>Loading models...</span>
+                            {/* Relational Button Groups with Skeleton Defense */}
+                            {loading ? (
+                                <div className="placeholder-glow w-100 my-4" style={{ minHeight: "150px" }}>
+                                    <h6 className="text-uppercase text-secondary fw-bold mb-2">Models</h6>
+                                    <div className="mb-3 d-flex gap-2">
+                                        <span className="placeholder col-2 rounded-pill py-3"></span>
+                                        <span className="placeholder col-3 rounded-pill py-3"></span>
+                                        <span className="placeholder col-2 rounded-pill py-3"></span>
                                     </div>
-                                ) : platformsError ? (
-                                    <Alert variant="danger" className="py-2 px-3 d-inline-block shadow-sm">
-                                        <strong>Database Error:</strong> {platformsError}
-                                    </Alert>
-                                ) : (
-                                    <div className="d-flex flex-wrap gap-2 justify-content-start">
-                                        <Button
-                                            variant={selectedPlatformId === null ? "info" : "outline-info"}
-                                            className="fw-bold rounded-pill px-4 text-uppercase"
-                                            onClick={() => setSelectedPlatformId(null)}
-                                        >
-                                            All Models
-                                        </Button>
-                                        {platforms.map(platform => (
+                                    <h6 className="text-uppercase text-secondary fw-bold mb-2 mt-4">Categories</h6>
+                                    <div className="d-flex gap-2">
+                                        <span className="placeholder col-3 rounded-pill py-3"></span>
+                                        <span className="placeholder col-2 rounded-pill py-3"></span>
+                                        <span className="placeholder col-4 rounded-pill py-3"></span>
+                                    </div>
+                                </div>
+                            ) : error ? (
+                                <Alert variant="danger" className="py-2 px-3 shadow-sm d-inline-block">
+                                    <strong>Database Error:</strong> {error}
+                                </Alert>
+                            ) : (
+                                <div className="w-100 pe-md-4">
+                                    {/* Models Selection */}
+                                    <div className="mb-4">
+                                        <h6 className="text-uppercase text-secondary fw-bold mb-2">Board Models</h6>
+                                        <div className="d-flex flex-wrap gap-2">
                                             <Button
-                                                key={`platform-filter-${platform.id}`}
-                                                variant={selectedPlatformId === platform.id ? "info" : "outline-secondary"}
-                                                className="fw-bold rounded-pill px-4"
-                                                onClick={() => setSelectedPlatformId(platform.id)}
+                                                variant={selectedModelId === null ? "info" : "outline-info"}
+                                                className="fw-bold rounded-pill px-4 btn-sm text-uppercase border-secondary"
+                                                onClick={() => setSelectedModelId(null)}
                                             >
-                                                {platform.name}
+                                                All Models
                                             </Button>
-                                        ))}
+                                            {models.map(m => (
+                                                <Button
+                                                    key={`model-${m.id}`}
+                                                    variant={selectedModelId === m.id ? "info" : "outline-secondary"}
+                                                    className="fw-bold rounded-pill px-4 btn-sm text-uppercase"
+                                                    onClick={() => setSelectedModelId(m.id)}
+                                                >
+                                                    {m.name}
+                                                </Button>
+                                            ))}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        </Col>
 
-                        {/* Right Column: Empty placeholder for future search/filter migration or metadata */}
-                        <Col xs={12} md={4} className="d-none d-md-block text-end">
-                            {/* Layout Anchor - Kept explicitly blank/empty per requirements for left-heavy structure */}
+                                    {/* Categories Selection */}
+                                    <div className="mb-3">
+                                        <h6 className="text-uppercase text-secondary fw-bold mb-2">Categories</h6>
+                                        <div className="d-flex flex-wrap gap-2">
+                                            <Button
+                                                variant={selectedCategoryId === null ? "info" : "outline-info"}
+                                                className="fw-bold rounded-pill px-4 btn-sm text-uppercase border-secondary"
+                                                onClick={() => setSelectedCategoryId(null)}
+                                            >
+                                                All Categories
+                                            </Button>
+                                            {categories.map(c => (
+                                                <Button
+                                                    key={`cat-${c.id}`}
+                                                    variant={selectedCategoryId === c.id ? "info" : "outline-secondary"}
+                                                    className="fw-bold rounded-pill px-4 btn-sm border-secondary text-uppercase"
+                                                    onClick={() => setSelectedCategoryId(c.id)}
+                                                >
+                                                    {c.name}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                         </Col>
+                        {/* The Right Column is intentionally empty/placeholder to enforce the left-leaning visual weight */}
+                        <Col xs={12} md={3} className="d-none d-md-block"></Col>
                     </Row>
 
-                    {/* Below Header: The Parts Results Grid */}
-                    <div className="parts-grid-container min-h-300">
-                        {partsLoading ? (
-                            <Row className="my-5">
+                    {/* PARTS RENDERING GRID */}
+                    <div className="parts-grid-container" style={{ minHeight: "400px" }}>
+                        {loading ? (
+                            <Row className="my-4">
                                 {Array.from({ length: 4 }).map((_, i) => (
-                                    <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: "280px" }} key={`skeleton-${i}`}>
-                                        <Card className="h-100 shadow-sm border-secondary bg-dark w-100 position-relative" aria-hidden="true">
-                                            <div className="placeholder-glow" style={{ aspectRatio: "16 / 9", height: "auto", width: "100%" }}>
+                                    <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: "280px" }} key={`skeleton-card-${i}`}>
+                                        <Card className="h-100 shadow-sm border-secondary bg-dark w-100">
+                                            <div className="placeholder-glow" style={{ aspectRatio: "16 / 9", width: "100%" }}>
                                                 <div className="placeholder w-100 h-100 bg-secondary" style={{ opacity: 0.2 }}></div>
                                             </div>
-                                            <Card.Body className="d-flex flex-column">
-                                                <div className="placeholder-glow mb-2">
-                                                    <span className="placeholder col-8 rounded bg-secondary"></span>
-                                                </div>
-                                                <div className="placeholder-glow mb-3">
-                                                    <span className="placeholder col-5 rounded bg-secondary"></span>
-                                                </div>
-                                                <div className="placeholder-glow mb-4">
-                                                    <span className="placeholder col-4 me-2 rounded bg-secondary"></span>
-                                                    <span className="placeholder col-3 rounded bg-secondary"></span>
-                                                </div>
-                                                <div className="mt-auto pt-3 border-top border-secondary placeholder-glow">
-                                                    <span className="placeholder col-12 btn btn-outline-info disabled" style={{ height: '31px' }}></span>
-                                                </div>
+                                            <Card.Body className="d-flex flex-column placeholder-glow">
+                                                <span className="placeholder col-8 rounded bg-secondary mb-2"></span>
+                                                <span className="placeholder col-5 rounded bg-secondary mb-3"></span>
+                                                <span className="placeholder col-12 btn btn-outline-info disabled mt-auto"></span>
                                             </Card.Body>
                                         </Card>
                                     </Col>
                                 ))}
                             </Row>
-                        ) : partsError ? (
-                            <Alert variant="danger" className="my-4 shadow-sm">
-                                <strong>Error loading parts:</strong> {partsError}
-                                {partsError.includes("Failed to fetch") && (
-                                    <div className="mt-2 text-muted small">
-                                        <em>Diagnostics: This network error typically means the database URL is missing or improperly formatted. Check browser environment variables.</em>
-                                    </div>
-                                )}
+                        ) : error ? (
+                            <Alert variant="danger" className="my-5 shadow-sm">
+                                <strong>Runtime Alert:</strong> Parts data unresolvable.
+                                {error.includes("Failed to fetch") && <div className="mt-2 text-muted small">Verify browser-side variable bindings.</div>}
                             </Alert>
                         ) : displayedParts.length === 0 ? (
-                            <Alert variant="info" className="my-5 py-5 text-center border-0 shadow-sm" style={{ backgroundColor: "#1a1d20", minHeight: "200px" }}>
-                                <h4 className="fw-bold mb-2 text-info">No parts found</h4>
-                                <p className="mb-0 text-light opacity-75">There are currently no parts available for this selection.</p>
-                                {selectedPlatformId !== null && (
-                                    <Button variant="outline-info" size="sm" className="mt-3 rounded-pill px-4" onClick={() => setSelectedPlatformId(null)}>
-                                        View All Meepo Parts
+                            <Alert variant="info" className="my-5 py-5 text-center border-0 shadow-sm" style={{ backgroundColor: "#1a1d20" }}>
+                                <h4 className="fw-bold mb-2 text-info">No Matching Components</h4>
+                                <p className="mb-0 text-light opacity-75">There are currently no models mapped to this specific combination of relational filters.</p>
+                                {(selectedModelId !== null || selectedCategoryId !== null) && (
+                                    <Button variant="outline-info" size="sm" className="mt-4 rounded-pill px-4 text-uppercase fw-bold" onClick={() => { setSelectedModelId(null); setSelectedCategoryId(null); }}>
+                                        Clear Filters
                                     </Button>
                                 )}
                             </Alert>
                         ) : (
-                            <Row>
+                            <Row className="my-4">
                                 {displayedParts.map((part, index) => (
                                     <PartCard key={`part-card-${part.id}-${index}`} part={mapPartToSchema(part)} index={index} />
                                 ))}
                             </Row>
                         )}
                     </div>
+
                 </Container>
             </main>
-
             <SiteFooter />
 
             <style dangerouslySetInnerHTML={{
@@ -239,8 +299,6 @@ const Page: React.FC<PageProps> = () => {
                 .uppercase { text-transform: uppercase; }
                 .letter-spacing-1 { letter-spacing: 0.1rem; }
                 .border-secondary { border-color: #24282d !important; }
-                .spacing-1 { letter-spacing: 0.05rem; }
-                .min-h-300 { min-height: 300px; }
             `}} />
         </div>
     )
