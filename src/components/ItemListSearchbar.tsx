@@ -309,8 +309,8 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                     {/* Show a clear fallback message if filtering leaves zero rows */}
                     {parts.length === 0 ? (
                         <Alert variant="info" className="my-5 py-4 text-center border-0 shadow-sm" style={{ backgroundColor: "#1a1d20", minHeight: "150px" }}>
-                            <h4 className="fw-bold mb-2">No parts found</h4>
-                            <p className="mb-0 text-muted">There are currently no parts available for {activePlatform ? `the ${activePlatform} platform` : 'this search'} in the database.</p>
+                            <h4 className="fw-bold mb-2 text-info">No parts found</h4>
+                            <p className="mb-0 text-light opacity-75">There are currently no parts available for {activePlatform ? `the ${activePlatform} platform` : 'this search'} in the database.</p>
                         </Alert>
                     ) : (
                         <Row>
