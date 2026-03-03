@@ -3,7 +3,7 @@ const GlobalStyles = () => (
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
 );
 import { type PageProps } from "gatsby"
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect } from "react"
 import { Container, Button, Form, Alert, Spinner, Image, Card, Row, Col, Badge, InputGroup } from "react-bootstrap"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
@@ -51,24 +51,6 @@ interface Taxonomy {
     name: string;
 }
 
-const FAB_METHODS = ["3d Printed", "CNC", "Molded", "Other"]
-
-const DEFAULT_PLATFORMS: Taxonomy[] = [
-    "Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "3D Servisas", "Acedeck", "Apex Boards",
-    "Backfire", "Bioboards", "Boardnamics", "Defiant Board Society", "Evolve", "Exway",
-    "Fluxmotion", "Hoyt St", "Lacroix Boards", "Linnpower", "MBoards", "MBS", "Meepo",
-    "Newbee", "Propel", "Radium Performance", "Stooge Raceboards", "Summerboard",
-    "Trampa Boards", "Wowgo"
-].map((name, i) => ({ id: `default-p-${i}`, name }));
-
-const DEFAULT_CATEGORIES: Taxonomy[] = [
-    "Anti-sink plate", "Battery", "Battery building parts", "Bearing", "BMS", "Bushing", "Charge Port",
-    "Charger case", "Complete board", "Connector", "Cover", "Deck", "Drill hole Jig", "Enclosure",
-    "ESC", "Fender", "Foothold / Bindings", "Fuse holder", "Gland", "Guard / Bumper", "Headlight",
-    "Heatsink", "Idler", "Motor", "Motor Mount", "Mount", "Pulley", "Remote", "Riser",
-    "Shocks / Damper", "Sprocket", "Stand", "Thumbwheel", "Tire", "Truck", "Wheel", "Wheel Hub", "Miscellaneous"
-].map((name, i) => ({ id: `default-c-${i}`, name }));
-
 // --- Validation Schema ---
 const partSchema = z.object({
     id: z.string(), // Internal tracking id for the UI array
@@ -77,13 +59,12 @@ const partSchema = z.object({
     title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
     imageSrc: z.string().url("Must be a valid URL").or(z.literal("")),
     platform: z.array(z.string()).min(1, "Select at least 1 manufacturer (platform)").max(1, "Only 1 manufacturer allowed"),
-    typeOfPart: z.array(z.string()).min(1, "Select at least 1 category").max(1, "Only 1 category allowed"),
-    fabricationMethod: z.array(z.string()).min(1, "Select at least 1 fabrication method"),
+    categoryId: z.string().min(1, "Please select a part category"),
+    fabricationMethodId: z.string().min(1, "Please select a fabrication method"),
     dropboxUrl: z.string().url("Must be a valid URL").or(z.literal("")),
     isOem: z.boolean(),
     author: z.string().optional(),
     submittedBy: z.string().optional(),
-    releaseYear: z.number().nullable().optional(),
     boardModel: z.string().nullable().optional(),
     needsModelReview: z.boolean().optional(),
 })
@@ -105,7 +86,8 @@ const PartFormItem = ({
     watch,
     setValue,
     platforms,
-    categories
+    categories,
+    fabricationMethods
 }: {
     index: number;
     control: any;
@@ -115,8 +97,9 @@ const PartFormItem = ({
     setValue: any;
     platforms: Taxonomy[];
     categories: Taxonomy[];
+    fabricationMethods: Taxonomy[];
 }) => {
-    const [activeTab, setActiveTab] = useState<'platform' | 'tag' | null>(null)
+    const [activeTab, setActiveTab] = useState<'category' | 'platform' | 'method' | null>(null)
     const [isScraping, setIsScraping] = useState(false)
 
     // Watch fields for this specific array item
@@ -126,11 +109,9 @@ const PartFormItem = ({
     const imageSrcValue = partValues?.imageSrc || ""
     const isOemValue = partValues?.isOem || false
     const selectedPlatforms = partValues?.platform || []
-    const selectedCategories = partValues?.typeOfPart || []
-    const selectedFabMethods = partValues?.fabricationMethod || []
+    const selectedCategoryId = partValues?.categoryId || ""
+    const selectedFabricationMethodId = partValues?.fabricationMethodId || ""
     const authorValue = partValues?.author || ""
-    const submittedByValue = partValues?.submittedBy || ""
-    const releaseYearValue = partValues?.releaseYear || null
     const boardModelValue = partValues?.boardModel || null
     const needsModelReviewValue = partValues?.needsModelReview || false
 
@@ -357,12 +338,29 @@ const PartFormItem = ({
 
                 {/* 4. Taxonomy Selectors */}
                 <div className="my-5">
+
                     <div className="d-flex gap-2 mb-2">
                         <Button variant={activeTab === 'platform' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'platform' ? null : 'platform')}>Manufacturer (Platform) *</Button>
-                        <Button variant={activeTab === 'tag' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'tag' ? null : 'tag')}>Category *</Button>
+                        <Button variant={activeTab === 'category' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'category' ? null : 'category')}>Part Category *</Button>
+                        <Button variant={activeTab === 'method' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'method' ? null : 'method')}>Fabrication Method *</Button>
                     </div>
 
                     <div className={`mt-3 p-4 rounded bg-secondary border border-secondary shadow-sm ${!activeTab ? 'd-none' : ''}`}>
+                        {activeTab === 'category' && (
+                            <div className="d-flex flex-wrap gap-2">
+                                {categories.map(opt => (
+                                    <Badge
+                                        key={opt.id}
+                                        bg={selectedCategoryId === opt.id ? "primary" : "none"}
+                                        className="p-2 border border-light cursor-pointer shadow-sm"
+                                        onClick={() => setValue(`parts.${index}.categoryId`, opt.id, { shouldValidate: true })}
+                                    >
+                                        {opt.name}
+                                    </Badge>
+                                ))}
+                            </div>
+                        )}
+
                         {activeTab === 'platform' && (() => {
                             const pinnedStreet = platforms.find(p => p.name === "Street (DIY/Generic)");
                             const pinnedOffroad = platforms.find(p => p.name === "Off-Road (DIY/Generic)");
@@ -479,14 +477,14 @@ const PartFormItem = ({
                             );
                         })()}
 
-                        {activeTab === 'tag' && (
+                        {activeTab === 'method' && (
                             <div className="d-flex flex-wrap gap-2">
-                                {categories.map(opt => (
+                                {fabricationMethods.map(opt => (
                                     <Badge
                                         key={opt.id}
-                                        bg={selectedCategories.includes(opt.name) ? "primary" : "none"}
+                                        bg={selectedFabricationMethodId === opt.id ? "primary" : "none"}
                                         className="p-2 border border-light cursor-pointer shadow-sm"
-                                        onClick={() => toggleArrayItem(`parts.${index}.typeOfPart`, opt.name, selectedCategories, true)}
+                                        onClick={() => setValue(`parts.${index}.fabricationMethodId`, opt.id, { shouldValidate: true })}
                                     >
                                         {opt.name}
                                     </Badge>
@@ -497,24 +495,30 @@ const PartFormItem = ({
 
                     <Controller
                         control={control}
+                        name={`parts.${index}.categoryId`}
+                        render={({ fieldState }) => (fieldState.error ? <div className="text-danger small mt-2 fw-bold">{fieldState.error.message}</div> : <></>)}
+                    />
+                    <Controller
+                        control={control}
                         name={`parts.${index}.platform`}
                         render={({ fieldState }) => (fieldState.error ? <div className="text-danger small mt-2 fw-bold">{fieldState.error.message}</div> : <></>)}
                     />
                     <Controller
                         control={control}
-                        name={`parts.${index}.typeOfPart`}
+                        name={`parts.${index}.fabricationMethodId`}
                         render={({ fieldState }) => (fieldState.error ? <div className="text-danger small mt-2 fw-bold">{fieldState.error.message}</div> : <></>)}
                     />
 
                     {/* Taxonomy Summary Pills */}
                     <div className="mt-4 p-3 rounded-pill bg-black border border-secondary d-flex align-items-center justify-content-center gap-2 flex-wrap shadow-inner" style={{ minHeight: '52px' }}>
-                        {selectedPlatforms.length === 0 && selectedCategories.length === 0 && !isOemValue ? (
+                        {selectedPlatforms.length === 0 && !selectedFabricationMethodId && !selectedCategoryId && !isOemValue ? (
                             <span className="small text-muted opacity-50 italic">No tags selected yet...</span>
                         ) : (
                             <>
                                 {isOemValue && <Badge bg="none" className="px-3 py-2 border rounded-pill uppercase small" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }}>OEM</Badge>}
+                                {selectedCategoryId && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{categories.find(c => c.id === selectedCategoryId)?.name || 'Processing'}</Badge>}
                                 {selectedPlatforms.map((p: string) => <Badge key={p} bg="primary" className="px-3 py-2 rounded-pill uppercase small">{p}</Badge>)}
-                                {selectedCategories.map((t: string) => <Badge key={t} bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{t}</Badge>)}
+                                {selectedFabricationMethodId && <Badge bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{fabricationMethods.find(f => f.id === selectedFabricationMethodId)?.name || 'Processing'}</Badge>}
                             </>
                         )}
                     </div>
@@ -522,27 +526,7 @@ const PartFormItem = ({
 
                 {/* 5. Additional / Minor Selectors */}
                 <Row className="mb-4">
-                    <Col md={6}>
-                        <Form.Label className="small uppercase fw-bold opacity-75 text-light">Fab Method *</Form.Label>
-                        <div className="d-flex flex-wrap gap-2 p-3 bg-secondary rounded border border-secondary shadow-inner">
-                            {FAB_METHODS.map(m => (
-                                <Button
-                                    key={m}
-                                    size="sm"
-                                    variant={selectedFabMethods.includes(m) ? "primary" : "outline-light"}
-                                    onClick={() => toggleArrayItem(`parts.${index}.fabricationMethod`, m, selectedFabMethods)}
-                                >
-                                    {m}
-                                </Button>
-                            ))}
-                        </div>
-                        <Controller
-                            control={control}
-                            name={`parts.${index}.fabricationMethod`}
-                            render={({ fieldState }) => (fieldState.error ? <div className="text-danger small mt-2 fw-bold">{fieldState.error.message}</div> : <></>)}
-                        />
-                    </Col>
-                    <Col md={6}>
+                    <Col md={12}>
                         <Form.Group>
                             <Form.Label className="small uppercase fw-bold opacity-75 text-light">Mirror Link</Form.Label>
                             <Controller
@@ -553,6 +537,7 @@ const PartFormItem = ({
                                         <Form.Control
                                             {...field}
                                             className={`input-contrast text-white p-3 shadow-sm ${fieldState.error ? 'is-invalid border-danger' : 'border-secondary'}`}
+                                            placeholder="Auto-filled via scraper or custom URL"
                                         />
                                         {fieldState.error && <div className="text-danger small mt-1 fw-bold">{fieldState.error.message}</div>}
                                     </>
@@ -565,10 +550,8 @@ const PartFormItem = ({
                 <HardwareFields
                     platform={selectedPlatforms}
                     boardModel={boardModelValue}
-                    releaseYear={releaseYearValue}
                     needsModelReview={needsModelReviewValue}
                     onChangeModel={(m) => setValue(`parts.${index}.boardModel`, m, { shouldValidate: true })}
-                    onChangeYear={(y) => setValue(`parts.${index}.releaseYear`, y, { shouldValidate: true })}
                     onChangeNeedsReview={(b) => setValue(`parts.${index}.needsModelReview`, b, { shouldValidate: true })}
                 />
             </Card.Body>
@@ -583,6 +566,7 @@ const SubmitPage: React.FC<PageProps> = () => {
 
     const [platforms, setPlatforms] = useState<Taxonomy[]>([])
     const [categories, setCategories] = useState<Taxonomy[]>([])
+    const [fabricationMethods, setFabricationMethods] = useState<Taxonomy[]>([])
     const [isTaxonomyLoading, setIsTaxonomyLoading] = useState(true)
 
     // Setup React Hook Form native integration
@@ -597,13 +581,12 @@ const SubmitPage: React.FC<PageProps> = () => {
                 title: "",
                 imageSrc: "",
                 platform: [],
-                fabricationMethod: ["3d Printed"],
-                typeOfPart: [],
+                categoryId: "",
+                fabricationMethodId: "",
                 dropboxUrl: "",
                 isOem: false,
                 author: "",
                 submittedBy: "",
-                releaseYear: null,
                 boardModel: null,
                 needsModelReview: false
             }]
@@ -625,13 +608,13 @@ const SubmitPage: React.FC<PageProps> = () => {
                 return; // SSR or missing config
             }
             try {
-                const { data: pData } = await client.from('board_platforms').select('id, name').order('name');
-                const { data: cData } = await client.from('part_categories').select('id, name').order('name');
+                const { data: pData } = await client.from('brands').select('id, name').order('name');
+                const { data: catData } = await client.from('part_categories').select('id, name').order('name');
+                const { data: cData } = await client.from('fabrication_methods').select('id, name').order('name');
                 if (isMounted) {
                     if (pData && pData.length > 0) setPlatforms(pData);
-                    else setPlatforms(DEFAULT_PLATFORMS);
-                    if (cData && cData.length > 0) setCategories(cData);
-                    else setCategories(DEFAULT_CATEGORIES);
+                    if (catData && catData.length > 0) setCategories(catData);
+                    if (cData && cData.length > 0) setFabricationMethods(cData);
                 }
             } catch (err) {
                 console.error("Failed to fetch taxonomy:", err);
@@ -667,15 +650,14 @@ const SubmitPage: React.FC<PageProps> = () => {
             const payloads = data.parts.map(p => ({
                 title: p.title,
                 platform: p.platform,
-                type_of_part: p.typeOfPart,
-                fabrication_method: p.fabricationMethod,
+                category_id: p.categoryId,
+                fabrication_method_id: p.fabricationMethodId,
                 external_url: p.externalUrl || p.url,
                 image_src: p.imageSrc || null,
                 dropbox_url: p.dropboxUrl || null,
                 is_oem: p.isOem,
                 author: p.author || null,
                 submitted_by: p.submittedBy && p.submittedBy.trim().length > 0 ? p.submittedBy.trim() : 'Anonymous',
-                release_year: p.releaseYear || null,
                 board_model: p.boardModel || null,
                 needs_model_review: p.needsModelReview || false,
                 status: 'pending' // Enforce rule for insertions directly here
@@ -697,8 +679,8 @@ const SubmitPage: React.FC<PageProps> = () => {
                 parts: [{
                     id: Math.random().toString(36).substr(2, 9),
                     url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
-                    fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false,
-                    author: "", submittedBy: "", releaseYear: null, boardModel: null, needsModelReview: false
+                    categoryId: "", fabricationMethodId: "", dropboxUrl: "", isOem: false,
+                    author: "", submittedBy: "", boardModel: null, needsModelReview: false
                 }]
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -781,6 +763,7 @@ const SubmitPage: React.FC<PageProps> = () => {
                                                 setValue={setValue}
                                                 platforms={platforms}
                                                 categories={categories}
+                                                fabricationMethods={fabricationMethods}
                                             />
                                         ))}
 
@@ -793,31 +776,23 @@ const SubmitPage: React.FC<PageProps> = () => {
                                                     onClick={() => append({
                                                         id: Math.random().toString(36).substr(2, 9),
                                                         url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
-                                                        fabricationMethod: ["3d Printed"], typeOfPart: [], dropboxUrl: "", isOem: false,
-                                                        author: "", submittedBy: "", releaseYear: null, boardModel: null, needsModelReview: false
+                                                        categoryId: "", fabricationMethodId: "", dropboxUrl: "", isOem: false,
+                                                        author: "", submittedBy: "", boardModel: null, needsModelReview: false
                                                     })}
                                                     disabled={status === 'submitting'}
                                                 >
-                                                    + Add Another Part ({fields.length}/10)
+                                                    + Attach Another Link
                                                 </Button>
                                             )}
-
-                                            <div className="p-4 bg-dark rounded border border-secondary shadow-lg">
-                                                <div className="d-flex flex-column gap-3">
-                                                    <p className="small text-light opacity-50 mb-0">
-                                                        By submitting, you confirm you have permission to share these resources.
-                                                    </p>
-                                                    <Button
-                                                        variant="primary"
-                                                        size="lg"
-                                                        type="submit"
-                                                        className="px-5 py-3 fw-bold shadow-lg"
-                                                        disabled={status === 'submitting'}
-                                                    >
-                                                        {status === 'submitting' ? <><Spinner animation="border" size="sm" className="me-2" /> Saving to Database...</> : `Submit All ${fields.length} Parts`}
-                                                    </Button>
-                                                </div>
-                                            </div>
+                                            <Button
+                                                variant="success"
+                                                size="lg"
+                                                type="submit"
+                                                className="py-3 fw-bold shadow-lg submit-button"
+                                                disabled={status === 'submitting'}
+                                            >
+                                                {status === 'submitting' ? <><Spinner size="sm" className="me-2" animation="border" /> Submitting sequence...</> : "Submit Sequence to Admin"}
+                                            </Button>
                                         </div>
                                     </>
                                 )}
@@ -825,21 +800,6 @@ const SubmitPage: React.FC<PageProps> = () => {
                         )}
                     </ClientOnly>
                 </Container>
-
-                <SiteFooter />
-
-                <style dangerouslySetInnerHTML={{
-                    __html: `
-                    .bg-secondary { background-color: #121417 !important; } 
-                    .border-secondary { border-color: #24282d !important; } 
-                    .input-contrast { background-color: #2b3035 !important; border-color: #495057 !important; color: #fff !important; } 
-                    .shadow-inner { box-shadow: inset 0 2px 8px rgba(0,0,0,0.7); } 
-                    .cursor-pointer { cursor: pointer; } 
-                    .uppercase { text-transform: uppercase; }
-                    .letter-spacing-1 { letter-spacing: 0.1rem; }
-                    .border-dashed { border-style: dashed !important; border-width: 2px !important; }
-                    .part-form-card { overflow: visible !important; }
-                ` }} />
             </div>
         </AppErrorBoundary>
     )

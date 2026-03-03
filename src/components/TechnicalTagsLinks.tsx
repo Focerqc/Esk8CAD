@@ -1,26 +1,48 @@
 import React from "react"
-import { Button } from "react-bootstrap"
+import { Button, Spinner, Alert } from "react-bootstrap"
+import { usePartCategories } from "../lib/supabase"
 
 /**
  * TechnicalTagsLinks: Displays all technical part categories (Tags).
- * Based on the 12+ categories defined in the submission form and system architecture.
+ * Unified to fetch from the Supabase 'part_categories' table.
  */
 const TechnicalTagsLinks: React.FC = () => {
-    const tags = [
-        "Anti-sink plate", "Battery", "Battery building parts", "Bearing", "BMS", "Bushing", "Charge Port", "Charger case",
-        "Complete board", "Connector", "Cover", "Deck", "Drill hole Jig", "Enclosure", "ESC", "Fender", "Foothold / Bindings",
-        "Fuse holder", "Gland", "Guard / Bumper", "Headlight", "Heatsink", "Idler", "Motor", "Motor Mount", "Mount",
-        "Pulley", "Remote", "Riser", "Shocks / Damper", "Sprocket", "Stand", "Thumbwheel", "Tire", "Truck", "Wheel",
-        "Wheel Hub", "Miscellaneous"
-    ]
+    const { categories, isLoading, error } = usePartCategories();
+
+    if (isLoading) {
+        return (
+            <div className="py-5 text-center opacity-75">
+                <Spinner animation="border" size="sm" variant="success" className="me-2" />
+                <span className="small fw-bold uppercase letter-spacing-1 text-success">Loading Part Categories...</span>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <Alert variant="danger" className="py-3 px-4 small border-1 border-danger bg-black text-danger fw-bold shadow-sm">
+                <div className="d-flex align-items-center justify-content-center gap-2">
+                    <i className="bi bi-exclamation-triangle-fill"></i>
+                    <span>Database Error: {error}</span>
+                    <Button
+                        variant="link"
+                        onClick={() => typeof window !== 'undefined' && window.location.reload()}
+                        className="p-0 text-danger text-decoration-underline small fw-bold ms-2"
+                    >
+                        Retry
+                    </Button>
+                </div>
+            </Alert>
+        );
+    }
 
     return (
         <div className="d-flex flex-wrap gap-2 mb-4" style={{ overflow: 'visible' }}>
-            {tags.map(tag => (
+            {categories.map(category => (
                 <Button
-                    key={tag}
+                    key={category.id}
                     variant="outline-success"
-                    href={`/parts/tags/${tag.toLowerCase().replace(/\s+/g, '-')}`}
+                    href={`/parts/tags/${category.name.toLowerCase().replace(/\s+/g, '-')}`}
                     className="px-3 py-1 border-1 fw-semibold"
                     style={{
                         fontSize: '0.85rem',
@@ -31,7 +53,7 @@ const TechnicalTagsLinks: React.FC = () => {
                         opacity: 0.8
                     }}
                 >
-                    {tag}
+                    {category.name}
                 </Button>
             ))}
         </div>

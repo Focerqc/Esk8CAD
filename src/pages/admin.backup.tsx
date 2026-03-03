@@ -7,7 +7,6 @@ import HardwareFields from "../components/Forms/HardwareFields"
 import { getSupabaseClient, Part } from "../lib/supabase"
 import { SupabaseClient, User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 
-// Admin UI Sync Force Rebuild 1.2
 const GlobalStyles = () => (
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
 );
@@ -56,6 +55,9 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                         <div className="mb-3">
                             <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{part.platform?.join(', ') || "No Platform"}</span>
                             <div className="d-flex flex-wrap gap-1">
+                                {part.type_of_part?.map((tag, i) => (
+                                    <Badge key={`cat-${i}`} pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{tag}</Badge>
+                                ))}
                                 {part.fabrication_method?.map((tag, i) => (
                                     <Badge key={`fab-${i}`} pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{tag}</Badge>
                                 ))}
@@ -105,21 +107,14 @@ export default function AdminPage(props: PageProps) {
     const [deletedParts, setDeletedParts] = useState<Part[]>([]);
     const [isDeletedLoading, setIsDeletedLoading] = useState(false);
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
-    const [fabricationMethods, setFabricationMethods] = useState<Taxonomy[]>([]);
     const [partCategories, setPartCategories] = useState<Taxonomy[]>([]);
-    const [brands, setBrands] = useState<any[]>([]);
-    const [models, setModels] = useState<any[]>([]);
-    const [newFabMethod, setNewFabMethod] = useState("");
-    const [newPartCategory, setNewPartCategory] = useState("");
+    const [boardPlatforms, setBoardPlatforms] = useState<Taxonomy[]>([]);
+    const [newCategory, setNewCategory] = useState("");
     const [newPlatform, setNewPlatform] = useState("");
 
-    const [selectedFabMethod, setSelectedFabMethod] = useState<Taxonomy | null>(null);
-    const [editFabMethodName, setEditFabMethodName] = useState("");
-    const [fabMethodDeleteConfirm, setFabMethodDeleteConfirm] = useState(false);
-
-    const [selectedPartCategory, setSelectedPartCategory] = useState<Taxonomy | null>(null);
-    const [editPartCategoryName, setEditPartCategoryName] = useState("");
-    const [partCategoryDeleteConfirm, setPartCategoryDeleteConfirm] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<Taxonomy | null>(null);
+    const [editCategoryName, setEditCategoryName] = useState("");
+    const [categoryDeleteConfirm, setCategoryDeleteConfirm] = useState(false);
 
     const [selectedPlatform, setSelectedPlatform] = useState<Taxonomy | null>(null);
     const [editPlatformName, setEditPlatformName] = useState("");
@@ -153,10 +148,8 @@ export default function AdminPage(props: PageProps) {
                 author: editingPart.author?.trim() || null,
                 submitted_by: editingPart.submitted_by?.trim() || 'Anonymous',
                 platform: editingPart.platform || [],
-                category_id: editingPart.category_id || null,
-                fabrication_method_id: editingPart.fabrication_method_id || null,
-                // Backward compatibility for rendered cards until re-fetch
-                fabrication_method: editingPart.fabrication_method_id ? [fabricationMethods.find(f => f.id === editingPart.fabrication_method_id)?.name || "Other"] : [],
+                type_of_part: editingPart.type_of_part || [],
+                fabrication_method: editingPart.fabrication_method || [],
                 is_oem: editingPart.is_oem || false,
                 dropbox_url: editingPart.dropbox_url?.trim() || null,
                 release_year: editingPart.release_year || null,
@@ -305,14 +298,11 @@ export default function AdminPage(props: PageProps) {
             if (pError) throw pError;
             setParts((pData as Part[]) || []);
 
-            const { data: cData } = await supabase.from('fabrication_methods').select('*').order('name');
-            if (cData) setFabricationMethods(cData);
+            const { data: cData } = await supabase.from('part_categories').select('*').order('name');
+            if (cData) setPartCategories(cData);
 
-            const { data: catData } = await supabase.from('part_categories').select('*').order('name');
-            if (catData) setPartCategories(catData);
-
-            const { data: bData } = await supabase.from('brands').select('*').order('name');
-            if (bData) setBrands(bData);
+            const { data: bData } = await supabase.from('board_platforms').select('*').order('name');
+            if (bData) setBoardPlatforms(bData);
         } catch (err: any) {
             setError(err.message || 'Error fetching data.');
         } finally {
@@ -490,84 +480,42 @@ export default function AdminPage(props: PageProps) {
     };
 
     // --- TAXONOMY HANDLERS ---
-    const handleAddFabMethod = async () => {
-        if (!newFabMethod.trim() || !supabase) return;
+    const handleAddCategory = async () => {
+        if (!newCategory.trim() || !supabase) return;
         try {
-            const { data, error: sbError } = await supabase.from('fabrication_methods').insert([{ name: newFabMethod.trim() }]).select();
-            if (sbError) throw sbError;
-            if (data && data.length) {
-                setFabricationMethods(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
-                setNewFabMethod('');
-            }
-        } catch (err: any) {
-            setError('Failed to add category: ' + (err.message || String(err)));
-        }
-    };
-
-    const handleUpdateFabMethod = async () => {
-        if (!selectedFabMethod || !editFabMethodName.trim() || !supabase) return;
-        try {
-            const { error: sbError } = await supabase.from('fabrication_methods').update({ name: editFabMethodName.trim() }).eq('id', selectedFabMethod.id);
-            if (sbError) throw sbError;
-            setFabricationMethods(prev => prev.map(c => c.id === selectedFabMethod.id ? { ...c, name: editFabMethodName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
-            setSelectedFabMethod(null);
-            setEditFabMethodName("");
-        } catch (err: any) {
-            setError('Failed to update category: ' + (err.message || String(err)));
-        }
-    };
-
-    const handleConfirmDeleteFabMethod = async () => {
-        if (!selectedFabMethod || !supabase) return;
-        try {
-            const id = selectedFabMethod.id;
-            const { error: sbError } = await supabase.from('fabrication_methods').delete().eq('id', id);
-            if (sbError) throw sbError;
-            setFabricationMethods(prev => prev.filter(c => c.id !== id));
-            setSelectedFabMethod(null);
-            setFabMethodDeleteConfirm(false);
-        } catch (err: any) {
-            setError('Failed to delete fabrication method: ' + (err.message || String(err)));
-            fetchData();
-        }
-    };
-
-    const handleAddPartCategory = async () => {
-        if (!newPartCategory.trim() || !supabase) return;
-        try {
-            const { data, error: sbError } = await supabase.from('part_categories').insert([{ name: newPartCategory.trim() }]).select();
+            const { data, error: sbError } = await supabase.from('part_categories').insert([{ name: newCategory.trim() }]).select();
             if (sbError) throw sbError;
             if (data && data.length) {
                 setPartCategories(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
-                setNewPartCategory('');
+                setNewCategory('');
             }
         } catch (err: any) {
             setError('Failed to add category: ' + (err.message || String(err)));
         }
     };
 
-    const handleUpdatePartCategory = async () => {
-        if (!selectedPartCategory || !editPartCategoryName.trim() || !supabase) return;
+    const handleUpdateCategory = async () => {
+        if (!selectedCategory || !editCategoryName.trim() || !supabase) return;
         try {
-            const { error: sbError } = await supabase.from('part_categories').update({ name: editPartCategoryName.trim() }).eq('id', selectedPartCategory.id);
+            const { error: sbError } = await supabase.from('part_categories').update({ name: editCategoryName.trim() }).eq('id', selectedCategory.id);
             if (sbError) throw sbError;
-            setPartCategories(prev => prev.map(c => c.id === selectedPartCategory.id ? { ...c, name: editPartCategoryName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
-            setSelectedPartCategory(null);
-            setEditPartCategoryName("");
+            setPartCategories(prev => prev.map(c => c.id === selectedCategory.id ? { ...c, name: editCategoryName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
+            setSelectedCategory(null);
+            setEditCategoryName("");
         } catch (err: any) {
             setError('Failed to update category: ' + (err.message || String(err)));
         }
     };
 
-    const handleConfirmDeletePartCategory = async () => {
-        if (!selectedPartCategory || !supabase) return;
+    const handleConfirmDeleteCategory = async () => {
+        if (!selectedCategory || !supabase) return;
         try {
-            const id = selectedPartCategory.id;
+            const id = selectedCategory.id;
             const { error: sbError } = await supabase.from('part_categories').delete().eq('id', id);
             if (sbError) throw sbError;
             setPartCategories(prev => prev.filter(c => c.id !== id));
-            setSelectedPartCategory(null);
-            setPartCategoryDeleteConfirm(false);
+            setSelectedCategory(null);
+            setCategoryDeleteConfirm(false);
         } catch (err: any) {
             setError('Failed to delete category: ' + (err.message || String(err)));
             fetchData();
@@ -579,12 +527,15 @@ export default function AdminPage(props: PageProps) {
         setIsLoading(true);
         try {
             const platformName = newPlatform.trim();
-            const slug = platformName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-            const { data, error: sbError } = await supabase.from('brands').insert([{ name: platformName, slug }]).select();
+            const { data, error: sbError } = await supabase.from('board_platforms').insert([{ name: platformName }]).select();
             if (sbError) throw sbError;
 
+            // Generate URL-friendly slug and populate the new relational table
+            const slug = platformName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            await supabase.from('brands').insert([{ name: platformName, slug }]);
+
             if (data && data.length) {
-                setBrands(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
+                setBoardPlatforms(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
                 setNewPlatform('');
             }
         } catch (err: any) {
@@ -598,9 +549,9 @@ export default function AdminPage(props: PageProps) {
         if (!selectedPlatform || !editPlatformName.trim() || !supabase) return;
         setIsLoading(true);
         try {
-            const { error: sbError } = await supabase.from('brands').update({ name: editPlatformName.trim() }).eq('id', selectedPlatform.id);
+            const { error: sbError } = await supabase.from('board_platforms').update({ name: editPlatformName.trim() }).eq('id', selectedPlatform.id);
             if (sbError) throw sbError;
-            setBrands(prev => prev.map(c => c.id === selectedPlatform.id ? { ...c, name: editPlatformName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
+            setBoardPlatforms(prev => prev.map(c => c.id === selectedPlatform.id ? { ...c, name: editPlatformName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
             setSelectedPlatform(null);
             setEditPlatformName("");
         } catch (err: any) {
@@ -615,9 +566,9 @@ export default function AdminPage(props: PageProps) {
         setIsLoading(true);
         try {
             const id = selectedPlatform.id;
-            const { error: sbError } = await supabase.from('brands').delete().eq('id', id);
+            const { error: sbError } = await supabase.from('board_platforms').delete().eq('id', id);
             if (sbError) throw sbError;
-            setBrands(prev => prev.filter(c => c.id !== id));
+            setBoardPlatforms(prev => prev.filter(c => c.id !== id));
             setSelectedPlatform(null);
             setPlatformDeleteConfirm(false);
         } catch (err: any) {
@@ -661,10 +612,11 @@ export default function AdminPage(props: PageProps) {
                 author: null,
                 submitted_by: 'System Context Admin',
                 platform: [newModelBrand],
+                type_of_part: ["Hardware Model Context Array"],
                 fabrication_method: ["Other"],
                 is_oem: false,
                 dropbox_url: null,
-
+                release_year: null,
                 board_model: newModelName.trim(),
                 needs_model_review: false,
                 is_hidden: true,
@@ -881,13 +833,13 @@ export default function AdminPage(props: PageProps) {
                     {/* 4. Part Categories */}
                     <Tab eventKey="categories" title="4. Part Categories">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <h5 className="text-info fw-bold mb-3">Part Categories</h5>
-                            <p className="text-muted small mb-4">Add or remove part categories globally (e.g. Battery, Motor, Deck).</p>
+                            <h5 className="text-info fw-bold mb-3">Terminology & Tags</h5>
+                            <p className="text-muted small mb-4">Add or remove part categories globally. Changes update `categories.json` upon publishing.</p>
 
                             <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
                                 <div className="d-flex flex-wrap gap-2">
                                     {partCategories.map(cat => (
-                                        <Badge key={cat.id} pill bg={selectedPartCategory?.id === cat.id ? "primary" : "secondary"} className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${selectedPartCategory?.id === cat.id ? 'border-primary' : 'border-dark'}`} onClick={() => { setSelectedPartCategory(cat); setEditPartCategoryName(cat.name); setPartCategoryDeleteConfirm(false); }}>
+                                        <Badge key={cat.id} pill bg={selectedCategory?.id === cat.id ? "primary" : "secondary"} className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${selectedCategory?.id === cat.id ? 'border-primary' : 'border-dark'}`} onClick={() => { setSelectedCategory(cat); setEditCategoryName(cat.name); setCategoryDeleteConfirm(false); }}>
                                             {cat.name}
                                         </Badge>
                                     ))}
@@ -895,28 +847,28 @@ export default function AdminPage(props: PageProps) {
                                 </div>
                             </div>
 
-                            {selectedPartCategory && (
+                            {selectedCategory && (
                                 <div className="mb-4 p-4 bg-secondary border border-secondary rounded shadow-sm">
-                                    <h6 className="text-info fw-bold mb-3">Modify Category: <span className="text-white">{selectedPartCategory.name}</span></h6>
-                                    {partCategoryDeleteConfirm ? (
+                                    <h6 className="text-info fw-bold mb-3">Modify Category: <span className="text-white">{selectedCategory.name}</span></h6>
+                                    {categoryDeleteConfirm ? (
                                         <Alert variant="danger" className="mb-0 bg-transparent border-danger text-danger d-flex flex-column gap-3">
                                             <div>
-                                                <strong>Confirm Deletion:</strong> Are you sure you want to permanently delete the category <span className="fw-bold px-1 text-white bg-dark rounded">{selectedPartCategory.name}</span> globally?
+                                                <strong>Confirm Deletion:</strong> Are you sure you want to permanently delete the category <span className="fw-bold px-1 text-white bg-dark rounded">{selectedCategory.name}</span> globally? This will affect parts using this tag.
                                             </div>
                                             <div className="d-flex gap-2">
-                                                <Button variant="danger" className="fw-bold" onClick={handleConfirmDeletePartCategory}>Yes, Delete</Button>
-                                                <Button variant="secondary" onClick={() => setPartCategoryDeleteConfirm(false)}>Cancel</Button>
+                                                <Button variant="danger" className="fw-bold" onClick={handleConfirmDeleteCategory}>Yes, Delete</Button>
+                                                <Button variant="secondary" onClick={() => setCategoryDeleteConfirm(false)}>Cancel</Button>
                                             </div>
                                         </Alert>
                                     ) : (
                                         <div className="d-flex flex-column gap-3">
                                             <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
-                                                <Form.Control type="text" className="input-contrast p-3 border-0" value={editPartCategoryName} onChange={e => setEditPartCategoryName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdatePartCategory()} />
-                                                <Button variant="success" className="fw-bold px-4 border-0" onClick={handleUpdatePartCategory} disabled={editPartCategoryName.trim() === selectedPartCategory.name || !editPartCategoryName.trim()}>Save Name</Button>
+                                                <Form.Control type="text" className="input-contrast p-3 border-0" value={editCategoryName} onChange={e => setEditCategoryName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdateCategory()} />
+                                                <Button variant="success" className="fw-bold px-4 border-0" onClick={handleUpdateCategory} disabled={editCategoryName.trim() === selectedCategory.name || !editCategoryName.trim()}>Save Name</Button>
                                             </InputGroup>
                                             <div className="d-flex justify-content-between">
-                                                <Button variant="secondary" size="sm" className="fw-bold" onClick={() => setSelectedPartCategory(null)}>Close Editor</Button>
-                                                <Button variant="outline-danger" size="sm" onClick={() => setPartCategoryDeleteConfirm(true)}>Delete "{selectedPartCategory.name}"</Button>
+                                                <Button variant="secondary" size="sm" className="fw-bold" onClick={() => setSelectedCategory(null)}>Close Editor</Button>
+                                                <Button variant="outline-danger" size="sm" onClick={() => setCategoryDeleteConfirm(true)}>Delete "{selectedCategory.name}"</Button>
                                             </div>
                                         </div>
                                     )}
@@ -924,66 +876,14 @@ export default function AdminPage(props: PageProps) {
                             )}
 
                             <InputGroup className="w-100 shadow-sm">
-                                <Form.Control type="text" placeholder="Enter new category name (e.g. Remote)..." className="input-contrast p-3" value={newPartCategory} onChange={e => setNewPartCategory(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPartCategory()} />
-                                <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddPartCategory}>Add Category</Button>
+                                <Form.Control type="text" placeholder="Enter new category name (e.g. Heatsink)..." className="input-contrast p-3" value={newCategory} onChange={e => setNewCategory(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddCategory()} />
+                                <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddCategory}>Add Category</Button>
                             </InputGroup>
                         </div>
                     </Tab>
 
-                    {/* 5. Fabrication Methods */}
-                    <Tab eventKey="fabrication_methods" title="5. Fabrication Methods">
-                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <h5 className="text-info fw-bold mb-3">Fabrication Methods</h5>
-                            <p className="text-muted small mb-4">Add or remove fabrication methods (e.g. 3D Print, CNC, Injection Molded).</p>
-
-                            <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
-                                <div className="d-flex flex-wrap gap-2">
-                                    {fabricationMethods.map(cat => (
-                                        <Badge key={cat.id} pill bg={selectedFabMethod?.id === cat.id ? "primary" : "secondary"} className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${selectedFabMethod?.id === cat.id ? 'border-primary' : 'border-dark'}`} onClick={() => { setSelectedFabMethod(cat); setEditFabMethodName(cat.name); setFabMethodDeleteConfirm(false); }}>
-                                            {cat.name}
-                                        </Badge>
-                                    ))}
-                                    {fabricationMethods.length === 0 && <span className="text-muted small p-2">No methods defined yet.</span>}
-                                </div>
-                            </div>
-
-                            {selectedFabMethod && (
-                                <div className="mb-4 p-4 bg-secondary border border-secondary rounded shadow-sm">
-                                    <h6 className="text-info fw-bold mb-3">Modify Method: <span className="text-white">{selectedFabMethod.name}</span></h6>
-                                    {fabMethodDeleteConfirm ? (
-                                        <Alert variant="danger" className="mb-0 bg-transparent border-danger text-danger d-flex flex-column gap-3">
-                                            <div>
-                                                <strong>Confirm Deletion:</strong> Are you sure you want to permanently delete the method <span className="fw-bold px-1 text-white bg-dark rounded">{selectedFabMethod.name}</span> globally?
-                                            </div>
-                                            <div className="d-flex gap-2">
-                                                <Button variant="danger" className="fw-bold" onClick={handleConfirmDeleteFabMethod}>Yes, Delete</Button>
-                                                <Button variant="secondary" onClick={() => setFabMethodDeleteConfirm(false)}>Cancel</Button>
-                                            </div>
-                                        </Alert>
-                                    ) : (
-                                        <div className="d-flex flex-column gap-3">
-                                            <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
-                                                <Form.Control type="text" className="input-contrast p-3 border-0" value={editFabMethodName} onChange={e => setEditFabMethodName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdateFabMethod()} />
-                                                <Button variant="success" className="fw-bold px-4 border-0" onClick={handleUpdateFabMethod} disabled={editFabMethodName.trim() === selectedFabMethod.name || !editFabMethodName.trim()}>Save Name</Button>
-                                            </InputGroup>
-                                            <div className="d-flex justify-content-between">
-                                                <Button variant="secondary" size="sm" className="fw-bold" onClick={() => setSelectedFabMethod(null)}>Close Editor</Button>
-                                                <Button variant="outline-danger" size="sm" onClick={() => setFabMethodDeleteConfirm(true)}>Delete "{selectedFabMethod.name}"</Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            <InputGroup className="w-100 shadow-sm">
-                                <Form.Control type="text" placeholder="Enter new fabrication method (e.g. Carbon Fiber)..." className="input-contrast p-3" value={newFabMethod} onChange={e => setNewFabMethod(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddFabMethod()} />
-                                <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddFabMethod}>Add Method</Button>
-                            </InputGroup>
-                        </div>
-                    </Tab>
-
-                    {/* 6. Board Platforms */}
-                    <Tab eventKey="platforms" title="6. Board Platforms">
+                    {/* 5. Board Platforms */}
+                    <Tab eventKey="platforms" title="5. Board Platforms">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
                             <h5 className="text-info fw-bold mb-3">Manufacturers & Platforms</h5>
                             <p className="text-muted small mb-4">Add or remove board platforms globally. Changes update `platforms.json` upon publishing.</p>
@@ -994,11 +894,11 @@ export default function AdminPage(props: PageProps) {
                                 <>
                                     <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
                                         {(() => {
-                                            const pinnedStreet = brands.find(p => p.name === "Street (DIY/Generic)");
-                                            const pinnedOffroad = brands.find(p => p.name === "Off-Road (DIY/Generic)");
-                                            const pinnedMisc = brands.find(p => p.name === "Misc" || p.name === "Miscellaneous");
+                                            const pinnedStreet = boardPlatforms.find(p => p.name === "Street (DIY/Generic)");
+                                            const pinnedOffroad = boardPlatforms.find(p => p.name === "Off-Road (DIY/Generic)");
+                                            const pinnedMisc = boardPlatforms.find(p => p.name === "Misc" || p.name === "Miscellaneous");
 
-                                            const others = brands.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(p.name));
+                                            const others = boardPlatforms.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(p.name));
                                             const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
                                             const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
                                             const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
@@ -1106,7 +1006,7 @@ export default function AdminPage(props: PageProps) {
                                                         </Col>
                                                     </Row>
 
-                                                    {brands.length === 0 && <span className="text-muted small p-2 d-block text-center mt-3">No platforms defined yet.</span>}
+                                                    {boardPlatforms.length === 0 && <span className="text-muted small p-2 d-block text-center mt-3">No platforms defined yet.</span>}
                                                 </>
                                             );
                                         })()}
@@ -1149,8 +1049,8 @@ export default function AdminPage(props: PageProps) {
                         </div>
                     </Tab>
 
-                    {/* 7. Manage Board Models */}
-                    <Tab eventKey="models" title="7. Manage Board Models">
+                    {/* 6. Manage Board Models */}
+                    <Tab eventKey="models" title="6. Manage Board Models">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
                             <div className="d-flex justify-content-between align-items-center mb-3">
                                 <h5 className="text-info fw-bold mb-0">Hardware Context (Board Models)</h5>
@@ -1169,11 +1069,11 @@ export default function AdminPage(props: PageProps) {
                                         <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-3">1. Select Parent Brand (Platform) *</Form.Label>
                                         <div className="bg-black p-4 rounded border border-secondary shadow-inner">
                                             {(() => {
-                                                const pinnedStreet = brands.find(p => p.name === "Street (DIY/Generic)");
-                                                const pinnedOffroad = brands.find(p => p.name === "Off-Road (DIY/Generic)");
-                                                const pinnedMisc = brands.find(p => p.name === "Misc" || p.name === "Miscellaneous");
+                                                const pinnedStreet = boardPlatforms.find(p => p.name === "Street (DIY/Generic)");
+                                                const pinnedOffroad = boardPlatforms.find(p => p.name === "Off-Road (DIY/Generic)");
+                                                const pinnedMisc = boardPlatforms.find(p => p.name === "Misc" || p.name === "Miscellaneous");
 
-                                                const others = brands.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(p.name));
+                                                const others = boardPlatforms.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(p.name));
                                                 const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
                                                 const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
                                                 const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
@@ -1356,7 +1256,7 @@ export default function AdminPage(props: PageProps) {
                                         </div>
                                     )}
 
-                                    {models.length === 0 && (
+                                    {uniqueBoardModels.length === 0 && (
                                         <div className="bg-black p-5 rounded border border-secondary text-center text-muted small shadow-inner">
                                             No board models found in the database.
                                         </div>
@@ -1397,8 +1297,8 @@ export default function AdminPage(props: PageProps) {
                         </div>
                     </Tab>
 
-                    {/* 8. Hidden */}
-                    <Tab eventKey="hidden" title={`8. Hidden (${hiddenParts.length})`}>
+                    {/* 7. Hidden */}
+                    <Tab eventKey="hidden" title={`7. Hidden (${hiddenParts.length})`}>
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
                             <div className="d-flex justify-content-between align-items-center mb-3">
                                 <h5 className="text-info fw-bold mb-0">Hidden Vault</h5>
@@ -1447,8 +1347,8 @@ export default function AdminPage(props: PageProps) {
                         </div>
                     </Tab>
 
-                    {/* 9. Recently Deleted */}
-                    <Tab eventKey="deleted" title={`9. Recently Deleted (${deletedParts.length})`}>
+                    {/* 8. Recently Deleted */}
+                    <Tab eventKey="deleted" title={`8. Recently Deleted (${deletedParts.length})`}>
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
                             <div className="d-flex justify-content-between align-items-center mb-3">
                                 <h5 className="text-danger fw-bold mb-0">Trash Bin</h5>
@@ -1577,173 +1477,139 @@ export default function AdminPage(props: PageProps) {
                             </Row>
 
                             {(() => {
-                                const pinnedStreet = brands.find(p => p.name === "Street (DIY/Generic)");
-                                const pinnedOffroad = brands.find(p => p.name === "Off-Road (DIY/Generic)");
-                                const pinnedMisc = brands.find(p => p.name === "Misc" || p.name === "Miscellaneous");
+                                const pinnedStreet = boardPlatforms.find(p => p.name === "Street (DIY/Generic)");
+                                const pinnedOffroad = boardPlatforms.find(p => p.name === "Off-Road (DIY/Generic)");
+                                const pinnedMisc = boardPlatforms.find(p => p.name === "Misc" || p.name === "Miscellaneous");
 
-                                const others = brands.filter(p => p.name !== "Street (DIY/Generic)" && p.name !== "Off-Road (DIY/Generic)" && p.name !== "Misc" && p.name !== "Miscellaneous");
-                                const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
+                                const others = boardPlatforms.filter(p => p.name !== "Street (DIY/Generic)" && p.name !== "Off-Road (DIY/Generic)" && p.name !== "Misc" && p.name !== "Miscellaneous");
+                                const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'A' && first <= 'I'; });
                                 const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
                                 const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
 
                                 return (
-                                    <>
-                                        <Form.Group className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-3">Manufacturer (Platform) *</Form.Label>
-                                            <div className="bg-black p-4 rounded border border-secondary shadow-inner">
-                                                <Row className="g-3 mb-4">
-                                                    <Col xs={12} lg={4}>
-                                                        {pinnedStreet && (
-                                                            <Badge
-                                                                bg={editingPart.platform?.includes(pinnedStreet.name) ? "primary" : "none"}
-                                                                className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                                style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => toggleArray('platform', pinnedStreet.name, editingPart.platform || [], true)}
-                                                            >
-                                                                {pinnedStreet.name}
-                                                            </Badge>
-                                                        )}
-                                                    </Col>
-                                                    <Col xs={12} lg={4}>
-                                                        {pinnedOffroad && (
-                                                            <Badge
-                                                                bg={editingPart.platform?.includes(pinnedOffroad.name) ? "primary" : "none"}
-                                                                className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                                style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => toggleArray('platform', pinnedOffroad.name, editingPart.platform || [], true)}
-                                                            >
-                                                                {pinnedOffroad.name}
-                                                            </Badge>
-                                                        )}
-                                                    </Col>
-                                                    <Col xs={12} lg={4}>
-                                                        {pinnedMisc && (
-                                                            <Badge
-                                                                bg={editingPart.platform?.includes(pinnedMisc.name) ? "primary" : "none"}
-                                                                className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                                style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => toggleArray('platform', pinnedMisc.name, editingPart.platform || [], true)}
-                                                            >
-                                                                {pinnedMisc.name}
-                                                            </Badge>
-                                                        )}
-                                                    </Col>
-                                                </Row>
-
-                                                <h3 className="h6 fw-bold text-light mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
-
-                                                <Row className="g-4">
-                                                    <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                        <div className="text-center mb-1">
-                                                            <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
-                                                        </div>
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                            {group1.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
-                                                                    {opt.name}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </Col>
-                                                    <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                        <div className="text-center mb-1">
-                                                            <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
-                                                        </div>
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                            {group2.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
-                                                                    {opt.name}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </Col>
-                                                    <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                        <div className="text-center mb-1">
-                                                            <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
-                                                        </div>
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                            {group3.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
-                                                                    {opt.name}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </Col>
-                                                </Row>
-                                            </div>
-                                        </Form.Group>
-
-                                        <Form.Group className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Part Category *</Form.Label>
-                                            <div className="d-flex flex-wrap gap-2 p-4 bg-black rounded border border-secondary shadow-inner">
-                                                {partCategories.map(c => {
-                                                    const isSelected = editingPart.category_id === c.id;
-                                                    return (
+                                    <Form.Group className="mb-4">
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-3">Manufacturer (Platform) *</Form.Label>
+                                        <div className="bg-black p-4 rounded border border-secondary shadow-inner">
+                                            <Row className="g-3 mb-4">
+                                                <Col xs={12} lg={4}>
+                                                    {pinnedStreet && (
                                                         <Badge
-                                                            key={c.id}
-                                                            role="button"
-                                                            bg={isSelected ? "primary" : "none"}
-                                                            className="border border-light p-2 cursor-pointer shadow-sm text-wrap lh-sm"
-                                                            onClick={() => setEditingPart({ ...editingPart, category_id: c.id })}
+                                                            bg={editingPart.platform?.includes(pinnedStreet.name) ? "primary" : "none"}
+                                                            className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                            style={{ fontSize: "0.85rem" }}
+                                                            onClick={() => toggleArray('platform', pinnedStreet.name, editingPart.platform || [], true)}
                                                         >
-                                                            {c.name}
+                                                            {pinnedStreet.name}
                                                         </Badge>
-                                                    );
-                                                })}
-                                            </div>
-                                        </Form.Group>
-
-                                        <Form.Group className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Fabrication Method *</Form.Label>
-                                            <div className="d-flex flex-wrap gap-2 p-4 bg-black rounded border border-secondary shadow-inner">
-                                                {fabricationMethods.map(c => {
-                                                    const isSelected = editingPart.fabrication_method_id === c.id;
-                                                    return (
+                                                    )}
+                                                </Col>
+                                                <Col xs={12} lg={4}>
+                                                    {pinnedOffroad && (
                                                         <Badge
-                                                            key={c.id}
-                                                            role="button"
-                                                            bg={isSelected ? "primary" : "none"}
-                                                            className="border border-light p-2 cursor-pointer shadow-sm text-wrap lh-sm"
-                                                            onClick={() => setEditingPart({ ...editingPart, fabrication_method_id: c.id })}
+                                                            bg={editingPart.platform?.includes(pinnedOffroad.name) ? "primary" : "none"}
+                                                            className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                            style={{ fontSize: "0.85rem" }}
+                                                            onClick={() => toggleArray('platform', pinnedOffroad.name, editingPart.platform || [], true)}
                                                         >
-                                                            {c.name}
+                                                            {pinnedOffroad.name}
                                                         </Badge>
-                                                    );
-                                                })}
-                                            </div>
-                                        </Form.Group>
+                                                    )}
+                                                </Col>
+                                                <Col xs={12} lg={4}>
+                                                    {pinnedMisc && (
+                                                        <Badge
+                                                            bg={editingPart.platform?.includes(pinnedMisc.name) ? "primary" : "none"}
+                                                            className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
+                                                            style={{ fontSize: "0.85rem" }}
+                                                            onClick={() => toggleArray('platform', pinnedMisc.name, editingPart.platform || [], true)}
+                                                        >
+                                                            {pinnedMisc.name}
+                                                        </Badge>
+                                                    )}
+                                                </Col>
+                                            </Row>
 
-                                        {/* Tags Summary Pills Section */}
-                                        <div className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Selection Summary (Tags)</Form.Label>
-                                            <div className="mt-2 p-3 rounded-pill bg-black border border-secondary d-flex align-items-center justify-content-center gap-2 flex-wrap shadow-inner" style={{ minHeight: '52px' }}>
-                                                {(!editingPart.platform || editingPart.platform.length === 0) && !editingPart.fabrication_method_id && !editingPart.category_id && !editingPart.is_oem ? (
-                                                    <span className="small text-muted opacity-50 italic">No tags selected yet...</span>
-                                                ) : (
-                                                    <>
-                                                        {editingPart.is_oem && <Badge bg="none" className="px-3 py-2 border rounded-pill uppercase small" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }}>OEM</Badge>}
-                                                        {editingPart.category_id && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{partCategories.find(c => c.id === editingPart.category_id)?.name || 'Category'}</Badge>}
-                                                        {editingPart.platform?.map((p: string) => <Badge key={p} bg="primary" className="px-3 py-2 rounded-pill uppercase small">{p}</Badge>)}
-                                                        {editingPart.fabrication_method_id && <Badge bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{fabricationMethods.find(f => f.id === editingPart.fabrication_method_id)?.name || 'Method'}</Badge>}
-                                                    </>
-                                                )}
-                                            </div>
+                                            <h3 className="h6 fw-bold text-light mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
+
+                                            <Row className="g-4">
+                                                <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                                    <div className="text-center mb-1">
+                                                        <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                        {group1.map(opt => (
+                                                            <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                {opt.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                                <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                                    <div className="text-center mb-1">
+                                                        <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                        {group2.map(opt => (
+                                                            <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                {opt.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                                <Col xs={12} lg={4} className="d-flex flex-column gap-2">
+                                                    <div className="text-center mb-1">
+                                                        <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
+                                                    </div>
+                                                    <div className="d-flex flex-wrap gap-2">
+                                                        {group3.map(opt => (
+                                                            <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                {opt.name}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                            </Row>
                                         </div>
-                                    </>
+                                    </Form.Group>
                                 );
                             })()}
 
+                            <Form.Group className="mb-4">
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Category *</Form.Label>
+                                <div className="d-flex flex-wrap gap-2 p-4 bg-black rounded border border-secondary shadow-inner">
+                                    {partCategories.map(c => (
+                                        <Badge key={c.id} role="button" bg={editingPart.type_of_part?.includes(c.name) ? "primary" : "none"} className="border border-light p-2 cursor-pointer shadow-sm text-wrap lh-sm" onClick={() => toggleArray('type_of_part', c.name, editingPart.type_of_part || [], true)}>
+                                            {c.name}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </Form.Group>
+
                             <Row className="mb-4">
-                                <Col md={12} className="d-flex align-items-center">
-                                    <Form.Check type="checkbox" id="edit-oem" label="OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-1" />
+                                <Col md={8}>
+                                    <Form.Group>
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light d-block">Fab Method *</Form.Label>
+                                        <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
+                                            {["3d Printed", "CNC", "Molded", "Other"].map(f => (
+                                                <Button key={f} size="sm" variant={editingPart.fabrication_method?.includes(f) ? "primary" : "outline-light"} onClick={() => toggleArray('fabrication_method', f, editingPart.fabrication_method || [])}>
+                                                    {f}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                    </Form.Group>
+                                </Col>
+                                <Col md={4} className="d-flex align-items-center">
+                                    <Form.Check type="checkbox" id="edit-oem" label="OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-3" />
                                 </Col>
                             </Row>
 
                             <HardwareFields
                                 platform={editingPart.platform || []}
                                 boardModel={editingPart.board_model || null}
+                                releaseYear={editingPart.release_year || null}
                                 needsModelReview={editingPart.needs_model_review || false}
                                 onChangeModel={(m) => setEditingPart({ ...editingPart, board_model: m })}
+                                onChangeYear={(y) => setEditingPart({ ...editingPart, release_year: y })}
                                 onChangeNeedsReview={(b) => setEditingPart({ ...editingPart, needs_model_review: b })}
                             />
                         </Modal.Body>

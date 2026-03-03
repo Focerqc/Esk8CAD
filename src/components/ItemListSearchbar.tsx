@@ -19,7 +19,7 @@ const mapPartToSchema = (part: Part): PartSchema => {
         image_url: part.image_src || "",
         author: "Unknown User", // Assuming author isn't in DB yet, fallback to "Unknown User"
         boardPlatform: (part.platform && part.platform.length > 0) ? part.platform[0] : "Misc",
-        tags: [...(part.type_of_part || []), ...(part.fabrication_method || [])],
+        tags: [...(part.fabrication_method || [])],
         externalUrl: part.external_url || undefined,
         dropboxUrl: part.dropbox_url || undefined,
         // Optional dropbox link, etc for future use
@@ -106,31 +106,27 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     const { models: brandModels, isLoading: modelsLoading } = useBrandHardware(activePlatform ? [activePlatform] : []);
     const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
-    // Arrays from live Supabase parts list
-    const uniquePartTypes = [...new Set(parts.map((p) => (p.type_of_part || [])).filter(Boolean).flat())] as string[]
-    const uniqueFabricationMethods = ["3d Printed", "CNC", "Laser", "Other", "PCB"]
+    // Dynamic extraction of Fabrication Methods across all available parts for this page
+    const uniqueFabricationMethods = useMemo(() => {
+        return [...new Set(parts.map((p) => (p.fabrication_method || [])).filter(Boolean).flat())].sort((a, b) => a.localeCompare(b)) as string[];
+    }, [parts]);
 
     // Checkbox useState object lists
-    const partTypeCheckboxes: Record<string, boolean> = Object.fromEntries(uniquePartTypes.map((p) => [p, false]));
-    const fabricationMethodCheckboxes: Record<string, boolean> = Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false]));
-
-    // Set useStates
-    const didMount = useRef(false)
     const [searchText, setSearchText] = useState("")
-    const [checkedTypeBoxes, setCheckedTypeBoxes] = useState<Record<string, boolean>>(partTypeCheckboxes)
-    const [checkedFabricationMethodBoxes, setCheckedFabricationMethodBoxes] = useState<Record<string, boolean>>(fabricationMethodCheckboxes)
+    const [checkedFabricationMethodBoxes, setCheckedFabricationMethodBoxes] = useState<Record<string, boolean>>({})
 
-    // Wait until parts have loaded so dynamic generic types register
+    const didMount = useRef(false)
+
+    // Sync init states when dynamic attributes fetch
     useEffect(() => {
         if (!isLoading && parts.length > 0) {
-            setCheckedTypeBoxes(Object.fromEntries(uniquePartTypes.map((p) => [p, false])));
+            setCheckedFabricationMethodBoxes(Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false])));
         }
     }, [isLoading, parts.length])
 
     const clearSearch = () => {
         setSearchText("")
-        setCheckedTypeBoxes(Object.fromEntries(uniquePartTypes.map((p) => [p, false])))
-        setCheckedFabricationMethodBoxes(fabricationMethodCheckboxes)
+        setCheckedFabricationMethodBoxes(Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false])))
     }
 
     //#region Query Parameter Pre-Filtering
@@ -143,28 +139,17 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
             setSearchText(decodeURIComponent(keyword))
         }
 
-        const type = (queryParams.get("type")?.split(",") ?? []) as string[]
-        if (type && type.every((t) => uniquePartTypes.includes(t))) {
-            const tempCheckedTypeBoxes = structuredClone(checkedTypeBoxes)
-            type.forEach((t) => tempCheckedTypeBoxes[t] = true)
-            setCheckedTypeBoxes(tempCheckedTypeBoxes)
-        }
-
         const fabricationMethod = (queryParams.get("fab")?.split(",") ?? queryParams.get("fabrication")?.split(",") ?? []) as string[]
         if (fabricationMethod && fabricationMethod.every((f) => uniqueFabricationMethods.includes(f))) {
-            const tempCheckedFabricationMethodBoxes = structuredClone(checkedFabricationMethodBoxes)
-            fabricationMethod.forEach((f) => tempCheckedFabricationMethodBoxes[f] = true)
-            setCheckedFabricationMethodBoxes(tempCheckedFabricationMethodBoxes)
+            const tempCheckedBoxes = Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false]))
+            fabricationMethod.forEach((f) => tempCheckedBoxes[f] = true)
+            setCheckedFabricationMethodBoxes(tempCheckedBoxes)
         }
 
         didMount.current = true
     }
 
     //#endregion
-
-    const handleTypeCheckbox = (e: ChangeEvent<HTMLInputElement>) => {
-        setCheckedTypeBoxes({ ...checkedTypeBoxes, [e.target.name]: e.target.checked })
-    }
 
     const handleFabricationMethodCheckbox = (e: ChangeEvent<HTMLInputElement>) => {
         setCheckedFabricationMethodBoxes({ ...checkedFabricationMethodBoxes, [e.target.name]: e.target.checked })
@@ -173,14 +158,12 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     const showCopySearchButton = useMemo(() => {
         return !!(
             searchText
-            || Object.values(checkedTypeBoxes).some((v) => !!v)
             || Object.values(checkedFabricationMethodBoxes).some((v) => !!v)
         );
-    }, [searchText, checkedTypeBoxes, checkedFabricationMethodBoxes]);
+    }, [searchText, checkedFabricationMethodBoxes]);
 
     const filteredParts = useMemo(() => {
         return parts.filter(part => {
-            const partTypes = part.type_of_part || [];
             const partPlatforms = part.platform || [];
             const partFabs = part.fabrication_method || [];
 
@@ -188,20 +171,17 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
             const keywordMatch = !searchTerm || (
                 (part.title?.toLowerCase().includes(searchTerm)) ||
                 (partPlatforms.some(p => p?.toLowerCase().includes(searchTerm))) ||
-                (partTypes.some(t => t?.toLowerCase().includes(searchTerm)))
+                (partFabs.some(t => t?.toLowerCase().includes(searchTerm)))
             );
-
-            const typeBoxesActive = Object.values(checkedTypeBoxes).some(v => !!v);
-            const categoryMatch = !typeBoxesActive || partTypes.some(t => !!checkedTypeBoxes[t]);
 
             const fabBoxesActive = Object.values(checkedFabricationMethodBoxes).some(v => !!v);
             const fabMatch = !fabBoxesActive || partFabs.some(f => !!checkedFabricationMethodBoxes[f]);
 
             const modelMatch = !selectedModel || part.board_model === selectedModel;
 
-            return keywordMatch && categoryMatch && fabMatch && modelMatch;
+            return keywordMatch && fabMatch && modelMatch;
         });
-    }, [parts, searchText, checkedTypeBoxes, checkedFabricationMethodBoxes, selectedModel]);
+    }, [parts, searchText, checkedFabricationMethodBoxes, selectedModel]);
 
     return (
         <>
@@ -252,14 +232,10 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                 </Row>
             )}
 
-            <div className="searchArea">
-
+            <div className="searchArea mb-5">
                 <Stack direction="vertical" gap={3}>
-                    <div className="searchKeyword">
-                        <Form.Label htmlFor="inputSearch" as="h3">
-                            Keyword:
-                        </Form.Label>
-
+                    {/* Pretty Rounded Search Bar */}
+                    <div className="searchKeyword w-100">
                         <Form.Control
                             as="input"
                             type="search"
@@ -267,41 +243,19 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                             value={searchText}
                             placeholder="Search text to filter by..."
                             onChange={(e) => setSearchText(e.target.value)}
+                            className="w-100 rounded-pill p-3 border-0 shadow-sm fw-bold bg-white text-dark"
+                            style={{ maxWidth: '100%', outline: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
                         />
                     </div>
 
-                    {uniquePartTypes.length > 1 &&
-                        <div className="searchTypeCheckBoxes">
-                            <Form.Label as="h3">
-                                Part Categories:
-                            </Form.Label>
-
-                            <ButtonGroup size="sm">
-                                {uniquePartTypes.sort((a, b) => a.localeCompare(b)).map((t, index) => (
-                                    <ToggleButton
-                                        key={`partType-${index}`}
-                                        checked={checkedTypeBoxes[t] || false}
-                                        onChange={handleTypeCheckbox}
-                                        name={t}
-                                        id={t}
-                                        type="checkbox"
-                                        value={1}
-                                        variant="outline-info">
-                                        {t}
-                                    </ToggleButton>
-                                ))}
-                            </ButtonGroup>
-                        </div>
-                    }
-
-                    {uniqueFabricationMethods.length > 1 &&
-                        <div className="searchFabricationCheckBoxes">
-                            <Form.Label as="h3">
+                    {uniqueFabricationMethods.length > 0 &&
+                        <div className="searchFabricationCheckBoxes d-flex flex-column gap-2 mt-2">
+                            <Form.Label className="mb-0 fw-bold fs-6 text-light">
                                 Fabrication Method(s):
                             </Form.Label>
 
-                            <ButtonGroup size="sm">
-                                {uniqueFabricationMethods.sort((a, b) => a.localeCompare(b)).map((f, index) => (
+                            <ButtonGroup size="sm" className="d-flex flex-wrap gap-2" style={{ maxWidth: "max-content" }}>
+                                {uniqueFabricationMethods.map((f, index) => (
                                     <ToggleButton
                                         key={`fabricationMethod-${index}`}
                                         checked={checkedFabricationMethodBoxes[f] || false}
@@ -310,7 +264,10 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                                         id={f}
                                         type="checkbox"
                                         value={1}
-                                        variant="outline-info">
+                                        variant="outline-info"
+                                        className="rounded px-3 py-1"
+                                        style={{ borderTopLeftRadius: "6px", borderBottomLeftRadius: "6px", borderTopRightRadius: "6px", borderBottomRightRadius: "6px" }}
+                                    >
                                         {f}
                                     </ToggleButton>
                                 ))}
@@ -318,7 +275,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                         </div>
                     }
 
-                    <Stack direction="horizontal" gap={2}>
+                    <Stack direction="horizontal" gap={2} className="mt-3">
                         <Button
                             type="button"
                             size="sm"
@@ -330,7 +287,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
 
                         <CopyLinkButton
                             text="Copy This Search"
-                            link={!windowIsDefined() ? "#" : "http://" + window.location.host + window.location.pathname + `?search=${encodeURIComponent(searchText)}` + `&type=${uniquePartTypes.filter((t) => !!checkedTypeBoxes[t])}` + `&fab=${uniqueFabricationMethods.filter((f) => !!checkedFabricationMethodBoxes[f])}`}
+                            link={!windowIsDefined() ? "#" : "http://" + window.location.host + window.location.pathname + `?search=${encodeURIComponent(searchText)}` + `&fab=${uniqueFabricationMethods.filter((f) => !!checkedFabricationMethodBoxes[f])}`}
                             style={{ display: showCopySearchButton ? "initial" : "none", maxWidth: "max-content" }} />
                     </Stack>
                 </Stack>

@@ -5,23 +5,19 @@ import { useBrandHardware } from '../../hooks/useBrandHardware';
 interface HardwareFieldsProps {
     platform: string[];
     boardModel: string | null;
-    releaseYear: number | null;
     needsModelReview: boolean;
     onChangeModel: (model: string | null) => void;
-    onChangeYear: (year: number | null) => void;
     onChangeNeedsReview: (needsReview: boolean) => void;
 }
 
 export default function HardwareFields({
     platform,
     boardModel,
-    releaseYear,
     needsModelReview,
     onChangeModel,
-    onChangeYear,
     onChangeNeedsReview
 }: HardwareFieldsProps) {
-    const { models, years, isLoading } = useBrandHardware(platform);
+    const { models, isLoading } = useBrandHardware(platform);
 
     // UI states
     const [isOpen, setIsOpen] = useState(false);
@@ -32,31 +28,23 @@ export default function HardwareFields({
 
     // Sync init state
     useEffect(() => {
-        if (boardModel || releaseYear) {
+        if (boardModel) {
             setIsOpen(true);
         }
-    }, [boardModel, releaseYear]);
+    }, [boardModel]);
 
     const activePlatform = platform.length > 0 ? platform[0] : null;
     const isGeneric = activePlatform ? ["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(activePlatform) : false;
 
     // Reset when toggled off
     useEffect(() => {
-        if (!isOpen && (boardModel !== null || releaseYear !== null)) {
+        if (!isOpen && boardModel !== null) {
             onChangeModel(null);
-            onChangeYear(null);
             onChangeNeedsReview(false);
             setIsAddingNewModel(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
-
-    // Combine fetched years and current releaseYear (if custom)
-    const displayYears = useMemo(() => {
-        const allYears = new Set(years);
-        if (releaseYear) allYears.add(releaseYear);
-        return Array.from(allYears).sort((a, b) => b - a); // descending
-    }, [years, releaseYear]);
 
     // Combine fetched models and current boardModel (if custom)
     const displayModels = useMemo(() => {
@@ -75,10 +63,6 @@ export default function HardwareFields({
         onChangeNeedsReview(!isExistingModelFromDb);
         setIsAddingNewModel(false);
     };
-
-    const handleYearSelect = (y: number) => {
-        onChangeYear(releaseYear === y ? null : y);
-    }
 
     const confirmCustomModel = () => {
         const trimmed = tempCustomModel.trim();
@@ -99,7 +83,6 @@ export default function HardwareFields({
         setTempCustomModel("");
         setIsAddingNewModel(false);
     };
-
 
     return (
         <div className="mt-4 p-4 bg-dark border border-secondary rounded shadow-sm">
@@ -125,42 +108,9 @@ export default function HardwareFields({
                         </div>
                     ) : (
                         <div className="d-flex flex-column gap-4">
-                            {/* YEAR SELECTION */}
-                            <div>
-                                <h6 className="small uppercase text-light opacity-75 fw-bold mb-2">1. Release Year (Optional)</h6>
-                                {isLoading ? <Spinner size="sm" animation="border" variant="info" /> : (
-                                    <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
-                                        {displayYears.map(y => (
-                                            <Button
-                                                key={y}
-                                                size="sm"
-                                                variant={releaseYear === y ? "info" : "outline-light"}
-                                                onClick={() => handleYearSelect(y)}
-                                            >
-                                                {y}
-                                            </Button>
-                                        ))}
-
-                                        <Button
-                                            size="sm"
-                                            variant={displayYears.length > 0 ? "outline-secondary" : "outline-info"}
-                                            className={displayYears.length > 0 ? "ms-auto" : ""}
-                                            onClick={() => {
-                                                const promptYear = window.prompt("Enter 4-digit year:");
-                                                if (promptYear && !isNaN(Number(promptYear)) && promptYear.length === 4) {
-                                                    onChangeYear(Number(promptYear));
-                                                }
-                                            }}
-                                        >
-                                            + Add Year
-                                        </Button>
-                                    </div>
-                                )}
-                            </div>
-
                             {/* MODEL SELECTION */}
                             <div>
-                                <h6 className="small uppercase text-light opacity-75 fw-bold mb-2">2. Exact Board Model</h6>
+                                <h6 className="small uppercase text-light opacity-75 fw-bold mb-2">Exact Board Model</h6>
                                 {isLoading ? <Spinner size="sm" animation="border" variant="info" /> : (
                                     <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
 

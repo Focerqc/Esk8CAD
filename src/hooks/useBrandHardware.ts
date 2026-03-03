@@ -3,7 +3,7 @@ import { getSupabaseClient } from '../lib/supabase';
 
 export function useBrandHardware(platformSelected: string[]) {
     const [models, setModels] = useState<string[]>([]);
-    const [years, setYears] = useState<number[]>([]);
+    
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
@@ -14,7 +14,7 @@ export function useBrandHardware(platformSelected: string[]) {
             if (!platformSelected || platformSelected.length === 0) {
                 if (isMounted) {
                     setModels([]);
-                    setYears([]);
+                    
                 }
                 return;
             }
@@ -25,7 +25,7 @@ export function useBrandHardware(platformSelected: string[]) {
             if (genericPlatforms.includes(platform)) {
                 if (isMounted) {
                     setModels([]);
-                    setYears([]);
+                    
                 }
                 return;
             }
@@ -39,7 +39,7 @@ export function useBrandHardware(platformSelected: string[]) {
             try {
                 const { data, error: fetchError } = await client
                     .from('parts')
-                    .select('board_model, release_year')
+                    .select('board_model')
                     .contains('platform', [platform])
                     .is('deleted_at', null);
 
@@ -65,5 +65,5 @@ export function useBrandHardware(platformSelected: string[]) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [platformSelected.join(',')]);
 
-    return { models, years, isLoading, error };
+    return { models, isLoading, error };
 }
