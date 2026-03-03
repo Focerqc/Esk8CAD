@@ -95,7 +95,7 @@ export default ({ isHomepage }: NavbarProps) => {
                         const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
                         dynamicPlatforms.push({
                             label: p.name,
-                            href: existingStatic ? existingStatic.href : `/parts/?platform=${encodeURIComponent(p.name)}`
+                            href: existingStatic ? existingStatic.href : `/parts/?brand=${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
                         } as NavPlatformDef);
                     });
                     setNavPlatforms(dynamicPlatforms);

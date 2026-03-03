@@ -526,8 +526,14 @@ export default function AdminPage(props: PageProps) {
         if (!newPlatform.trim() || !supabase) return;
         setIsLoading(true);
         try {
-            const { data, error: sbError } = await supabase.from('board_platforms').insert([{ name: newPlatform.trim() }]).select();
+            const platformName = newPlatform.trim();
+            const { data, error: sbError } = await supabase.from('board_platforms').insert([{ name: platformName }]).select();
             if (sbError) throw sbError;
+
+            // Generate URL-friendly slug and populate the new relational table
+            const slug = platformName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            await supabase.from('brands').insert([{ name: platformName, slug }]);
+
             if (data && data.length) {
                 setBoardPlatforms(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
                 setNewPlatform('');

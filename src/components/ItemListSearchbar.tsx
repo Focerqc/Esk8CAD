@@ -6,6 +6,7 @@ import windowIsDefined from "../hooks/windowIsDefined"
 import CopyLinkButton from "./CopyLinkButton"
 import PartCard, { PartSchema } from "./PartCard"
 import { useParts } from "../util/parts"
+import { useBrandHardware } from "../hooks/useBrandHardware"
 import { Part } from "../lib/supabase"
 
 /**
@@ -101,6 +102,10 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     const activePlatform = platformOverride || getPlatformFromURL();
     const { parts, isLoading, error } = useParts(activePlatform);
 
+    // Fetch specifically assigned relational models for this specific platform
+    const { models: brandModels, isLoading: modelsLoading } = useBrandHardware(activePlatform ? [activePlatform] : []);
+    const [selectedModel, setSelectedModel] = useState<string | null>(null);
+
     // Arrays from live Supabase parts list
     const uniquePartTypes = [...new Set(parts.map((p) => (p.type_of_part || [])).filter(Boolean).flat())] as string[]
     const uniqueFabricationMethods = ["3d Printed", "CNC", "Laser", "Other", "PCB"]
@@ -192,16 +197,62 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
             const fabBoxesActive = Object.values(checkedFabricationMethodBoxes).some(v => !!v);
             const fabMatch = !fabBoxesActive || partFabs.some(f => !!checkedFabricationMethodBoxes[f]);
 
-            return keywordMatch && categoryMatch && fabMatch;
+            const modelMatch = !selectedModel || part.board_model === selectedModel;
+
+            return keywordMatch && categoryMatch && fabMatch && modelMatch;
         });
-    }, [parts, searchText, checkedTypeBoxes, checkedFabricationMethodBoxes]);
+    }, [parts, searchText, checkedTypeBoxes, checkedFabricationMethodBoxes, selectedModel]);
 
     return (
         <>
+            {activePlatform && (
+                <Row className="mb-4 pb-4 border-bottom border-secondary">
+                    <Col xs={12} md={9} className="text-start">
+                        <h2 className="display-4 fw-bold mb-4 text-white text-uppercase" style={{ letterSpacing: '0.1rem' }}>
+                            {activePlatform} <span style={{ color: '#0dcaf0' }}>PARTS</span>
+                        </h2>
+
+                        <h5 className="text-uppercase text-secondary fw-bold mb-3">BOARD MODELS</h5>
+
+                        {modelsLoading ? (
+                            <div className="placeholder-glow w-100" style={{ minHeight: "40px" }}>
+                                <div className="mb-3 d-flex gap-2">
+                                    <span className="placeholder col-2 rounded-pill py-3"></span>
+                                    <span className="placeholder col-3 rounded-pill py-3"></span>
+                                    <span className="placeholder col-2 rounded-pill py-3"></span>
+                                </div>
+                            </div>
+                        ) : brandModels && brandModels.length > 0 ? (
+                            <div className="d-flex flex-wrap gap-2 pe-md-4">
+                                <Button
+                                    variant={selectedModel === null ? "info" : "outline-info"}
+                                    className="fw-bold rounded-pill px-4 btn-sm text-uppercase border-secondary shadow-sm"
+                                    onClick={() => setSelectedModel(null)}
+                                >
+                                    All Models
+                                </Button>
+                                {brandModels.map(m => (
+                                    <Button
+                                        key={`model-${m}`}
+                                        variant={selectedModel === m ? "info" : "outline-secondary"}
+                                        className="fw-bold rounded-pill px-4 btn-sm text-uppercase shadow-sm pe-auto"
+                                        onClick={() => setSelectedModel(m)}
+                                    >
+                                        {m}
+                                    </Button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-muted small fst-italic">No specific hardware models currently registered for this brand.</div>
+                        )}
+                    </Col>
+
+                    {/* Empty placeholder column to enforce layout alignment */}
+                    <Col xs={12} md={3} className="d-none d-md-block"></Col>
+                </Row>
+            )}
+
             <div className="searchArea">
-                <Form.Label as="h2">
-                    Search
-                </Form.Label>
 
                 <Stack direction="vertical" gap={3}>
                     <div className="searchKeyword">
@@ -283,8 +334,6 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                             style={{ display: showCopySearchButton ? "initial" : "none", maxWidth: "max-content" }} />
                     </Stack>
                 </Stack>
-
-                <hr />
             </div>
 
             {/* Defensive Coding Data Display: Skeleton Loading Grid, Error, Gallery Map */}

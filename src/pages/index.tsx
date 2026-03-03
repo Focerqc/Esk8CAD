@@ -53,7 +53,7 @@ const Page: React.FC<PageProps> = () => {
                         const existingStatic = platformsRaw.find(dp => dp.label === p.name);
                         return {
                             label: p.name,
-                            href: existingStatic ? existingStatic.href : `/parts/?platform=${encodeURIComponent(p.name)}`
+                            href: existingStatic ? existingStatic.href : `/parts/?brand=${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
                         };
                     });
                     setAllPlatforms(dynamicPlatforms);
