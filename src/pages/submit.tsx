@@ -1,6 +1,20 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 const GlobalStyles = () => (
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    <>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+        <style dangerouslySetInnerHTML={{
+            __html: `
+            .bg-secondary { background-color: #121417 !important; }
+            .border-secondary { border-color: #24282d !important; }
+            .input-contrast { background-color: #2b3035 !important; border-color: #495057 !important; color: #fff !important; }
+            .input-contrast:focus { background-color: #32383e !important; color: #fff !important; border-color: #0dcaf0 !important; box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25) !important; }
+            .input-contrast::placeholder { color: rgba(255, 255, 255, 0.45) !important; }
+            .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important; }
+            .uppercase { text-transform: uppercase; }
+            .letter-spacing-1 { letter-spacing: 1px; }
+            .cursor-pointer { cursor: pointer; }
+        ` }} />
+    </>
 );
 import { type PageProps } from "gatsby"
 import React, { useState, useEffect } from "react"
