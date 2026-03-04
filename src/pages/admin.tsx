@@ -1754,12 +1754,12 @@ export default function AdminPage(props: PageProps) {
                                                 {editingPart.is_oem && (
                                                     <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-2 px-3">OEM</Badge>
                                                 )}
-                                                {editingPart.model_id && (
+                                                {((editingPart as any).models?.name || editingPart.model_id) && (
                                                     <Badge pill bg="warning" text="dark" className="border border-warning py-2 px-3">
-                                                        {models.find(m => m.id === editingPart.model_id)?.name || editingPart.model_id}
+                                                        {(editingPart as any).models?.name || (models.find(m => m.id === editingPart.model_id)?.name) || editingPart.model_id}
                                                     </Badge>
                                                 )}
-                                                {!editingPart.model_id && editingPart.board_model && (
+                                                {!editingPart.model_id && !(editingPart as any).models?.name && editingPart.board_model && (
                                                     <Badge pill bg="secondary" text="light" className="border border-dark py-2 px-3">
                                                         {editingPart.board_model}
                                                     </Badge>

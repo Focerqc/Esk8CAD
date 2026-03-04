@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button, Form, Spinner, InputGroup } from 'react-bootstrap';
 import { useBrandHardware } from '../../hooks/useBrandHardware';
 import { Model } from '../../lib/supabase';
@@ -21,7 +21,8 @@ export default function HardwareFields({
     const { models, isLoading } = useBrandHardware(brandId);
 
     // UI states
-    const [isOpen, setIsOpen] = useState(false);
+    const [isOpen, setIsOpen] = useState(!!modelId);
+    const prevOpen = useRef(isOpen);
 
     // For Board Model
     const [isAddingNewModel, setIsAddingNewModel] = useState(false);
@@ -34,13 +35,14 @@ export default function HardwareFields({
         }
     }, [modelId]);
 
-    // Reset when toggled off
+    // Reset when toggled off - ONLY if it was previously open
     useEffect(() => {
-        if (!isOpen && modelId !== null) {
+        if (prevOpen.current === true && isOpen === false) {
             onChangeModel(null);
             onChangeNeedsReview(false);
             setIsAddingNewModel(false);
         }
+        prevOpen.current = isOpen;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
