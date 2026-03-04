@@ -6,9 +6,11 @@ export interface Part {
     title: string;
     image_src?: string | string[] | null;
     external_url?: string | null;
-    platform: string[];
-    category_id?: string | null;
-    fabrication_method_id?: string | null;
+    platform?: string[]; // Legacy string array
+    platform_id?: string | null; // Foreign Key to brands.id
+    category_id?: string | null; // Foreign Key to part_categories.id
+    fabrication_method_id?: string | null; // Foreign Key to fabrication_methods.id
+    model_id?: string | null; // Foreign Key to models.id
     // Legacy arrays used previously; keeping them optional so TS doesn't break if old data is returned
     type_of_part?: string[];
     fabrication_method?: string[];
@@ -19,7 +21,7 @@ export interface Part {
     submitted_by?: string | null;
     dropbox_url?: string | null;
     release_year?: number | null;
-    board_model?: string | null;
+    board_model?: string | null; // Legacy string display
     needs_model_review?: boolean;
     is_hidden?: boolean;
     deleted_at?: string | null;
@@ -37,6 +39,20 @@ export interface FabricationMethod {
     id: string;
     name: string;
     description?: string;
+    created_at?: string;
+}
+
+export interface Brand {
+    id: string;
+    name: string;
+    slug?: string;
+    created_at?: string;
+}
+
+export interface Model {
+    id: string;
+    name: string;
+    brand_id: string;
     created_at?: string;
 }
 

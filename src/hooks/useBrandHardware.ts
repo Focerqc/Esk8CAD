@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { getSupabaseClient } from '../lib/supabase';
+import { getSupabaseClient, Model } from '../lib/supabase';
 
-export function useBrandHardware(platformSelected: string[]) {
-    const [models, setModels] = useState<string[]>([]);
-    
+export function useBrandHardware(brandId: string | null) {
+    const [models, setModels] = useState<Model[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
@@ -11,21 +10,9 @@ export function useBrandHardware(platformSelected: string[]) {
         let isMounted = true;
 
         async function fetchHardware() {
-            if (!platformSelected || platformSelected.length === 0) {
+            if (!brandId) {
                 if (isMounted) {
                     setModels([]);
-                    
-                }
-                return;
-            }
-
-            const platform = platformSelected[0];
-            const genericPlatforms = ["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"];
-
-            if (genericPlatforms.includes(platform)) {
-                if (isMounted) {
-                    setModels([]);
-                    
                 }
                 return;
             }
@@ -37,20 +24,26 @@ export function useBrandHardware(platformSelected: string[]) {
             setError(null);
 
             try {
-                const { data, error: fetchError } = await client
-                    .from('parts')
-                    .select('board_model')
-                    .contains('platform', [platform])
-                    .is('deleted_at', null);
+                // Fetch from the dedicated 'models' table instead of 'parts'
+                let query = client
+                    .from('models')
+                    .select('*, brands!inner(name)')
+                    .order('name', { ascending: true });
+
+                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(brandId);
+
+                if (isUuid) {
+                    query = query.eq('brand_id', brandId);
+                } else {
+                    query = query.ilike('brands.name', brandId);
+                }
+
+                const { data, error: fetchError } = await query;
 
                 if (fetchError) throw fetchError;
 
                 if (isMounted && data) {
-                    const uniqueModels = Array.from(new Set(data.map(d => d.board_model).filter(Boolean))) as string[];
-                    const uniqueYears = Array.from(new Set(data.map(d => d.release_year).filter(Boolean))) as number[];
-
-                    setModels(uniqueModels.sort((a, b) => a.localeCompare(b)));
-                    setYears(uniqueYears.sort((a, b) => b - a)); // Descending
+                    setModels(data as Model[]);
                 }
             } catch (err: any) {
                 if (isMounted) setError(err);
@@ -62,8 +55,7 @@ export function useBrandHardware(platformSelected: string[]) {
         fetchHardware();
 
         return () => { isMounted = false; };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [platformSelected.join(',')]);
+    }, [brandId]);
 
     return { models, isLoading, error };
 }

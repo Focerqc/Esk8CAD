@@ -47,7 +47,7 @@ const Page: React.FC<PageProps> = () => {
             try {
                 const client = getSupabaseClient();
                 if (!client) return;
-                const { data } = await client.from('board_platforms').select('name').order('name');
+                const { data } = await client.from('brands').select('name').order('name');
                 if (data && data.length > 0 && isMounted) {
                     const dynamicPlatforms = data.map(p => {
                         const existingStatic = platformsRaw.find(dp => dp.label === p.name);

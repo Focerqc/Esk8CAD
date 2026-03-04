@@ -1,23 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button, Form, Spinner, InputGroup } from 'react-bootstrap';
 import { useBrandHardware } from '../../hooks/useBrandHardware';
+import { Model } from '../../lib/supabase';
 
 interface HardwareFieldsProps {
-    platform: string[];
-    boardModel: string | null;
+    brandId: string | null;
+    modelId: string | null; // Can be a UUID or a custom string if new
     needsModelReview: boolean;
-    onChangeModel: (model: string | null) => void;
+    onChangeModel: (modelId: string | null) => void;
     onChangeNeedsReview: (needsReview: boolean) => void;
 }
 
 export default function HardwareFields({
-    platform,
-    boardModel,
+    brandId,
+    modelId,
     needsModelReview,
     onChangeModel,
     onChangeNeedsReview
 }: HardwareFieldsProps) {
-    const { models, isLoading } = useBrandHardware(platform);
+    const { models, isLoading } = useBrandHardware(brandId);
 
     // UI states
     const [isOpen, setIsOpen] = useState(false);
@@ -28,17 +29,14 @@ export default function HardwareFields({
 
     // Sync init state
     useEffect(() => {
-        if (boardModel) {
+        if (modelId) {
             setIsOpen(true);
         }
-    }, [boardModel]);
-
-    const activePlatform = platform.length > 0 ? platform[0] : null;
-    const isGeneric = activePlatform ? ["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(activePlatform) : false;
+    }, [modelId]);
 
     // Reset when toggled off
     useEffect(() => {
-        if (!isOpen && boardModel !== null) {
+        if (!isOpen && modelId !== null) {
             onChangeModel(null);
             onChangeNeedsReview(false);
             setIsAddingNewModel(false);
@@ -46,33 +44,30 @@ export default function HardwareFields({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOpen]);
 
-    // Combine fetched models and current boardModel (if custom)
-    const displayModels = useMemo(() => {
-        const allModels = new Set(models);
-        if (boardModel) allModels.add(boardModel);
-        return Array.from(allModels).sort((a, b) => a.localeCompare(b));
-    }, [models, boardModel]);
+    // Find if the current modelId corresponds to an existing model name for display
+    const selectedModelName = useMemo(() => {
+        if (!modelId) return null;
+        const found = models.find(m => m.id === modelId);
+        return found ? found.name : modelId; // Fallback to modelId string if it's a new custom name
+    }, [models, modelId]);
 
-    if (!activePlatform) return null; // wait until platform selected
+    if (!brandId) return null; // wait until brand selected
 
-    const handleModelSelect = (m: string) => {
-        onChangeModel(boardModel === m ? null : m);
-        // If they click an existing button from the models list, it doesn't need review
-        // unless it's a custom model that was already flagged
-        const isExistingModelFromDb = models.includes(m);
-        onChangeNeedsReview(!isExistingModelFromDb);
+    const handleModelSelect = (m: Model) => {
+        onChangeModel(modelId === m.id ? null : m.id);
+        onChangeNeedsReview(false);
         setIsAddingNewModel(false);
     };
 
     const confirmCustomModel = () => {
         const trimmed = tempCustomModel.trim();
         if (trimmed) {
-            const existingModel = models.find(m => m.toLowerCase() === trimmed.toLowerCase());
+            const existingModel = models.find(m => m.name.toLowerCase() === trimmed.toLowerCase());
             if (existingModel) {
-                onChangeModel(existingModel);
+                onChangeModel(existingModel.id);
                 onChangeNeedsReview(false);
             } else {
-                onChangeModel(trimmed);
+                onChangeModel(trimmed); // Store the name temporarily; onSubmit will handle insertion
                 onChangeNeedsReview(true);
             }
         }
@@ -91,9 +86,8 @@ export default function HardwareFields({
                     variant="outline-info"
                     className="w-100 fw-bold py-3"
                     onClick={() => setIsOpen(true)}
-                    disabled={isGeneric && !activePlatform}
                 >
-                    Does this part fit a specific make/model of {activePlatform || 'a brand'}?
+                    Does this part fit a specific board model?
                 </Button>
             ) : (
                 <div className="hardware-drilldown">
@@ -102,80 +96,84 @@ export default function HardwareFields({
                         <Button variant="outline-secondary" size="sm" onClick={() => setIsOpen(false)}>Cancel / Clear</Button>
                     </div>
 
-                    {isGeneric ? (
-                        <div className="text-center p-3 text-muted">
-                            <p className="mb-0">Please select a specific Manufacturer (Platform) above to associate a model.</p>
-                        </div>
-                    ) : (
-                        <div className="d-flex flex-column gap-4">
-                            {/* MODEL SELECTION */}
-                            <div>
-                                <h6 className="small uppercase text-light opacity-75 fw-bold mb-2">Exact Board Model</h6>
-                                {isLoading ? <Spinner size="sm" animation="border" variant="info" /> : (
-                                    <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
+                    <div className="d-flex flex-column gap-4">
+                        {/* MODEL SELECTION */}
+                        <div>
+                            <h6 className="small uppercase text-light opacity-75 fw-bold mb-2">Exact Board Model</h6>
+                            {isLoading ? <Spinner size="sm" animation="border" variant="info" /> : (
+                                <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
 
-                                        {!isAddingNewModel && displayModels.map(m => {
-                                            const isSelected = boardModel === m;
-                                            const isCustomSelected = isSelected && needsModelReview;
-                                            return (
-                                                <Button
-                                                    key={m}
-                                                    size="sm"
-                                                    variant={isSelected ? (isCustomSelected ? "warning" : "primary") : "outline-light"}
-                                                    onClick={() => handleModelSelect(m)}
-                                                >
-                                                    {isCustomSelected && <span className="me-1">🚩</span>}
-                                                    {m}
-                                                </Button>
-                                            );
-                                        })}
-
-                                        {!isAddingNewModel && (
+                                    {!isAddingNewModel && models.map(m => {
+                                        const isSelected = modelId === m.id;
+                                        return (
                                             <Button
+                                                key={m.id}
                                                 size="sm"
-                                                variant="warning"
-                                                className={`fw-bold ${displayModels.length > 0 ? "ms-auto" : ""}`}
-                                                onClick={() => {
-                                                    setIsAddingNewModel(true);
-                                                    setTempCustomModel("");
-                                                }}
+                                                variant={isSelected ? "primary" : "outline-light"}
+                                                onClick={() => handleModelSelect(m)}
                                             >
-                                                Other / Add New
+                                                {m.name}
                                             </Button>
-                                        )}
+                                        );
+                                    })}
 
-                                        {isAddingNewModel && (
-                                            <div className="w-100 position-relative">
-                                                <InputGroup>
-                                                    <Form.Control
-                                                        type="text"
-                                                        placeholder="Type new board model..."
-                                                        value={tempCustomModel}
-                                                        onChange={e => setTempCustomModel(e.target.value)}
-                                                        onKeyDown={e => {
-                                                            if (e.key === 'Enter') confirmCustomModel();
-                                                            if (e.key === 'Escape') cancelCustomModel();
-                                                        }}
-                                                        className="bg-dark text-white border-warning placeholder-white"
-                                                        autoFocus
-                                                    />
-                                                    <Button variant="success" className="fw-bold px-3" onClick={confirmCustomModel}>
-                                                        ✓ Confirm
-                                                    </Button>
-                                                    <Button variant="outline-warning" onClick={cancelCustomModel}>
-                                                        Cancel
-                                                    </Button>
-                                                </InputGroup>
-                                                <small className="text-warning mt-2 d-block fw-bold">
-                                                    🚩 This will flag the model name for admin sequence alignment.
-                                                </small>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
+                                    {/* Show the custom model button if it's currently selected but not in the DB list */}
+                                    {!isAddingNewModel && modelId && !models.some(m => m.id === modelId) && (
+                                        <Button
+                                            size="sm"
+                                            variant="warning"
+                                            onClick={() => onChangeModel(null)}
+                                        >
+                                            <span className="me-1">🚩</span>
+                                            {modelId}
+                                        </Button>
+                                    )}
+
+                                    {!isAddingNewModel && (
+                                        <Button
+                                            size="sm"
+                                            variant="warning"
+                                            className={`fw-bold ${models.length > 0 ? "ms-auto" : ""}`}
+                                            onClick={() => {
+                                                setIsAddingNewModel(true);
+                                                setTempCustomModel("");
+                                            }}
+                                        >
+                                            Other / Add New
+                                        </Button>
+                                    )}
+
+                                    {isAddingNewModel && (
+                                        <div className="w-100 position-relative">
+                                            <InputGroup>
+                                                <Form.Control
+                                                    type="text"
+                                                    placeholder="Type new board model..."
+                                                    value={tempCustomModel}
+                                                    onChange={e => setTempCustomModel(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.key === 'Enter') confirmCustomModel();
+                                                        if (e.key === 'Escape') cancelCustomModel();
+                                                    }}
+                                                    className="bg-dark text-white border-warning placeholder-white"
+                                                    autoFocus
+                                                />
+                                                <Button variant="success" className="fw-bold px-3" onClick={confirmCustomModel}>
+                                                    ✓ Confirm
+                                                </Button>
+                                                <Button variant="outline-warning" onClick={cancelCustomModel}>
+                                                    Cancel
+                                                </Button>
+                                            </InputGroup>
+                                            <small className="text-warning mt-2 d-block fw-bold">
+                                                🚩 This will flag the model name for admin sequence alignment.
+                                            </small>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             )}
         </div>

@@ -18,9 +18,9 @@ export const PartCard = ({ part, index }: { part: PartSchema; index?: number }) 
 
     return (
         <Col
-            xs={12} sm={6} md={6} lg={4} xl={3}
+            xs={12} sm={12} md={6} lg={4} xl={4}
             className="mb-4 d-flex align-items-stretch"
-            style={{ minWidth: '280px', flexShrink: 0 }}
+            style={{ minWidth: '320px', flexShrink: 0 }}
             key={`part-card-${part.id}-${index}`}
         >
             <div className="w-100 h-100 position-relative z-index-0">

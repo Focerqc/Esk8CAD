@@ -23,8 +23,14 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
     const author = part.author || part.submitted_by || "Unknown";
     const [imgError, setImgError] = useState(false);
 
+    // Get metadata from joined objects or fallback to legacy arrays
+    const brandName = (part as any).brands?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "No Platform");
+    const methodName = (part as any).fabrication_methods?.name || (part.fabrication_method && part.fabrication_method.length > 0 ? part.fabrication_method[0] : "");
+    const categoryName = (part as any).part_categories?.name || (part.type_of_part && part.type_of_part.length > 0 ? part.type_of_part[0] : "");
+    const modelName = (part as any).models?.name || part.board_model || "";
+
     return (
-        <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }}>
+        <Col xs={12} sm={12} md={6} lg={4} xl={4} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '320px', flexShrink: 0 }}>
             <div className="w-100 h-100 position-relative z-index-0">
                 <Card className="h-100 shadow-sm border-secondary db-card bg-dark text-light overflow-hidden">
                     <div className="card-img-holder position-relative overflow-hidden" style={{ aspectRatio: "16 / 9", height: "auto", width: "100%", backgroundColor: "#1a1d20" }}>
@@ -54,12 +60,12 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                         </Card.Subtitle>
 
                         <div className="mb-3">
-                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{part.platform?.join(', ') || "No Platform"}</span>
+                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{brandName}</span>
                             <div className="d-flex flex-wrap gap-1">
-                                {part.fabrication_method?.map((tag, i) => (
-                                    <Badge key={`fab-${i}`} pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{tag}</Badge>
-                                ))}
+                                {categoryName && <Badge pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{categoryName}</Badge>}
+                                {methodName && <Badge pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{methodName}</Badge>}
                                 {part.is_oem && <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-1 px-2">OEM</Badge>}
+                                {modelName && <Badge pill bg="warning" text="dark" className="py-1 px-2 border border-warning" style={{ fontSize: '0.7rem' }}>{modelName}</Badge>}
                             </div>
                         </div>
 
@@ -89,6 +95,7 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
         </Col>
     );
 };
+
 
 export default function AdminPage(props: PageProps) {
     const [isMounted, setIsMounted] = useState(false);
@@ -152,20 +159,22 @@ export default function AdminPage(props: PageProps) {
                 image_src: safeImageSrc?.trim() || null,
                 author: editingPart.author?.trim() || null,
                 submitted_by: editingPart.submitted_by?.trim() || 'Anonymous',
-                platform: editingPart.platform || [],
-                category_id: editingPart.category_id || null,
-                fabrication_method_id: editingPart.fabrication_method_id || null,
-                // Backward compatibility for rendered cards until re-fetch
-                fabrication_method: editingPart.fabrication_method_id ? [fabricationMethods.find(f => f.id === editingPart.fabrication_method_id)?.name || "Other"] : [],
+                platform_id: editingPart.platform_id || null, // Capture UUID
+                category_id: editingPart.category_id || null, // Capture UUID
+                fabrication_method_id: editingPart.fabrication_method_id || null, // Capture UUID
+                model_id: (editingPart.model_id && editingPart.model_id.length === 36) ? editingPart.model_id : null,
+                board_model: (!editingPart.model_id || editingPart.model_id.length !== 36) ? editingPart.model_id : null,
                 is_oem: editingPart.is_oem || false,
                 dropbox_url: editingPart.dropbox_url?.trim() || null,
                 release_year: editingPart.release_year || null,
-                board_model: editingPart.board_model || null,
                 needs_model_review: editingPart.needs_model_review || false,
             };
             const { error: sbError } = await supabase.from('parts').update(payload).eq('id', editingPart.id);
             if (sbError) throw sbError;
-            setParts(prev => prev.map(p => p.id === editingPart.id ? { ...p, ...payload } : p));
+
+            // Success - refresh the list to see joined data
+            fetchData();
+            fetchHiddenData();
             setEditingPart(null);
         } catch (err: any) {
             setError('Failed to save edits: ' + (err.message || String(err)));
@@ -174,16 +183,11 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
-    const toggleArray = (field: keyof Part, value: string, current: string[], isSingle = false) => {
-        if (current.includes(value)) {
-            setEditingPart(prev => ({ ...prev!, [field]: isSingle ? [] : current.filter(v => v !== value) }));
-        } else {
-            setEditingPart(prev => ({ ...prev!, [field]: isSingle ? [value] : [...current, value] }));
-        }
-    };
+
+    const allActiveParts = useMemo(() => [...parts, ...hiddenParts], [parts, hiddenParts]);
 
     // Filtered lists
-    const pendingParts = parts.filter(p => p.status === 'pending');
+    const pendingParts = allActiveParts.filter(p => p.status === 'pending');
     const approvedParts = parts.filter(p => p.status === 'approved');
 
     // Registry audit duplicate lookup
@@ -198,46 +202,27 @@ export default function AdminPage(props: PageProps) {
         return Array.from(urlMap.values()).filter(group => group.length > 1);
     }, [parts]);
 
-    const allActiveParts = useMemo(() => [...parts, ...hiddenParts], [parts, hiddenParts]);
-
-    const uniqueBoardModels = useMemo(() => {
-        const models = new Set<string>();
-        allActiveParts.forEach(p => {
-            if (p.board_model) models.add(p.board_model);
-        });
-        return Array.from(models).sort((a, b) => a.localeCompare(b));
-    }, [allActiveParts]);
-
     const groupedBoardModels = useMemo(() => {
-        const groups: Record<string, Set<string>> = {};
-        const orphans: Set<string> = new Set();
+        const groups: Record<string, Set<any>> = {};
 
-        allActiveParts.forEach(p => {
-            if (!p.board_model) return;
-            const model = p.board_model;
-
-            // Handle cases with no platform or empty platform array
-            if (!p.platform || p.platform.length === 0) {
-                orphans.add(model);
-                return;
-            }
-
-            p.platform.forEach(plat => {
-                if (!groups[plat]) groups[plat] = new Set();
-                groups[plat].add(model);
-            });
+        // Use the models taxonomy we fetched instead of scraping parts
+        models.forEach(m => {
+            const brand = brands.find(b => b.id === m.brand_id);
+            const brandName = brand ? brand.name : "Unknown Brand";
+            if (!groups[brandName]) groups[brandName] = new Set();
+            groups[brandName].add(m);
         });
 
         const result = Object.entries(groups).map(([brand, modelsSet]) => ({
             brand,
-            models: Array.from(modelsSet).sort((a, b) => a.localeCompare(b))
+            models: Array.from(modelsSet).sort((a, b) => (a as any).name.localeCompare((b as any).name))
         })).sort((a, b) => a.brand.localeCompare(b.brand));
 
         return {
             groups: result,
-            orphans: Array.from(orphans).sort((a, b) => a.localeCompare(b))
+            orphans: [] as string[]
         };
-    }, [parts]);
+    }, [models, brands]);
 
     // Initial mount and client library check
     useEffect(() => {
@@ -301,9 +286,16 @@ export default function AdminPage(props: PageProps) {
         setIsLoading(true);
         setError(null);
         try {
-            const { data: pData, error: pError } = await supabase.from('parts').select('*').eq('is_hidden', false).is('deleted_at', null).order('created_at', { ascending: false });
+            // Use table joins to get metadata names
+            const { data: pData, error: pError } = await supabase
+                .from('parts')
+                .select('*, brands(name), part_categories(name), fabrication_methods(name), models(name)')
+                .eq('is_hidden', false)
+                .is('deleted_at', null)
+                .order('created_at', { ascending: false });
+
             if (pError) throw pError;
-            setParts((pData as Part[]) || []);
+            setParts((pData as any[]) || []);
 
             const { data: cData } = await supabase.from('fabrication_methods').select('*').order('name');
             if (cData) setFabricationMethods(cData);
@@ -313,6 +305,9 @@ export default function AdminPage(props: PageProps) {
 
             const { data: bData } = await supabase.from('brands').select('*').order('name');
             if (bData) setBrands(bData);
+
+            const { data: modData } = await supabase.from('models').select('*').order('name');
+            if (modData) setModels(modData);
         } catch (err: any) {
             setError(err.message || 'Error fetching data.');
         } finally {
@@ -324,9 +319,15 @@ export default function AdminPage(props: PageProps) {
         if (!supabase) return;
         setIsHiddenLoading(true);
         try {
-            const { data: hData, error: hError } = await supabase.from('parts').select('*').eq('is_hidden', true).is('deleted_at', null).order('created_at', { ascending: false });
+            const { data: hData, error: hError } = await supabase
+                .from('parts')
+                .select('*, brands(name), part_categories(name), fabrication_methods(name), models(name)')
+                .eq('is_hidden', true)
+                .is('deleted_at', null)
+                .order('created_at', { ascending: false });
+
             if (hError) throw hError;
-            setHiddenParts((hData as Part[]) || []);
+            setHiddenParts((hData as any[]) || []);
         } catch (err: any) {
             setError(err.message || 'Error fetching hidden data.');
         } finally {
@@ -392,12 +393,18 @@ export default function AdminPage(props: PageProps) {
     // --- ACTION HANDLERS ---
     const handleApprove = async (id: string) => {
         if (!supabase) return;
+        setActionLoadingId(id);
         try {
-            const { error: sbError } = await supabase.from('parts').update({ status: 'approved' }).eq('id', id);
+            const { error: sbError } = await supabase.from('parts').update({ status: 'approved', is_hidden: false }).eq('id', id);
             if (sbError) throw sbError;
-            setParts(prev => prev.map(p => p.id === id ? { ...p, status: 'approved' } : p));
+
+            // Re-fetch to correctly distribute the part into the approved state
+            fetchData();
+            fetchHiddenData();
         } catch (err: any) {
             setError('Failed to approve: ' + (err.message || String(err)));
+        } finally {
+            setActionLoadingId(null);
         }
     };
 
@@ -493,7 +500,9 @@ export default function AdminPage(props: PageProps) {
     const handleAddFabMethod = async () => {
         if (!newFabMethod.trim() || !supabase) return;
         try {
-            const { data, error: sbError } = await supabase.from('fabrication_methods').insert([{ name: newFabMethod.trim() }]).select();
+            const methodName = newFabMethod.trim();
+            const slug = generateSlug(methodName);
+            const { data, error: sbError } = await supabase.from('fabrication_methods').insert([{ name: methodName, slug }]).select();
             if (sbError) throw sbError;
             if (data && data.length) {
                 setFabricationMethods(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
@@ -535,7 +544,9 @@ export default function AdminPage(props: PageProps) {
     const handleAddPartCategory = async () => {
         if (!newPartCategory.trim() || !supabase) return;
         try {
-            const { data, error: sbError } = await supabase.from('part_categories').insert([{ name: newPartCategory.trim() }]).select();
+            const categoryName = newPartCategory.trim();
+            const slug = generateSlug(categoryName);
+            const { data, error: sbError } = await supabase.from('part_categories').insert([{ name: categoryName, slug }]).select();
             if (sbError) throw sbError;
             if (data && data.length) {
                 setPartCategories(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
@@ -632,15 +643,24 @@ export default function AdminPage(props: PageProps) {
         if (!editBoardModelOld || !supabase) return;
         setIsLoading(true);
         try {
-            const newValue = editBoardModelNew.trim() || null;
+            const newValue = editBoardModelNew.trim();
+            if (!newValue) return;
+
+            // Find the model object
+            const modelObj = models.find(m => m.name === editBoardModelOld);
+            if (!modelObj) throw new Error("Model not found in taxonomy.");
+
             const { error: sbError } = await supabase
-                .from('parts')
-                .update({ board_model: newValue, needs_model_review: false })
-                .eq('board_model', editBoardModelOld);
+                .from('models')
+                .update({ name: newValue })
+                .eq('id', modelObj.id);
 
             if (sbError) throw sbError;
 
-            setParts(prev => prev.map(p => p.board_model === editBoardModelOld ? { ...p, board_model: newValue, needs_model_review: false } : p));
+            // Refresh models
+            const { data: modData } = await supabase.from('models').select('*').order('name');
+            if (modData) setModels(modData);
+
             setEditBoardModelOld("");
             setEditBoardModelNew("");
         } catch (err: any) {
@@ -650,30 +670,29 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
+    const generateSlug = (name: string) => {
+        return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+    };
+
     const handleAddBoardModel = async () => {
         if (!newModelBrand || !newModelName.trim() || !supabase) return;
         setIsLoading(true);
         try {
-            const payload = {
-                title: `[Hardware Context] ${newModelName.trim()}`,
-                external_url: "",
-                image_src: null,
-                author: null,
-                submitted_by: 'System Context Admin',
-                platform: [newModelBrand],
-                fabrication_method: ["Other"],
-                is_oem: false,
-                dropbox_url: null,
+            // Find the brand ID for the selected brand name
+            const brandObj = brands.find(b => b.name === newModelBrand);
+            if (!brandObj) throw new Error("Selected platform/brand not found.");
 
-                board_model: newModelName.trim(),
-                needs_model_review: false,
-                is_hidden: true,
-                status: 'approved'
-            };
-            const { error: sbError } = await supabase.from('parts').insert([payload]);
+            const slug = generateSlug(newModelName);
+            const { data, error: sbError } = await supabase
+                .from('models')
+                .insert([{ name: newModelName.trim(), brand_id: brandObj.id, slug }])
+                .select();
+
             if (sbError) throw sbError;
 
-            fetchData();
+            if (data && data.length) {
+                setModels(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
+            }
 
             setShowAddModel(false);
             setNewModelBrand("");
@@ -1319,16 +1338,16 @@ export default function AdminPage(props: PageProps) {
                                         <div key={group.brand} className="bg-black p-4 rounded border border-secondary shadow-inner">
                                             <h6 className="text-white fw-bold uppercase letter-spacing-1 mb-3 opacity-75">{group.brand}</h6>
                                             <div className="d-flex flex-wrap gap-2">
-                                                {group.models.map(model => (
+                                                {group.models.map((model: any) => (
                                                     <Badge
-                                                        key={model}
+                                                        key={model.id}
                                                         pill
-                                                        bg={editBoardModelOld === model ? "primary" : "secondary"}
-                                                        className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${editBoardModelOld === model ? 'border-primary' : 'border-dark'}`}
-                                                        onClick={() => { setEditBoardModelOld(model); setEditBoardModelNew(model); }}
+                                                        bg={editBoardModelOld === model.name ? "primary" : "secondary"}
+                                                        className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${editBoardModelOld === model.name ? 'border-primary' : 'border-dark'}`}
+                                                        onClick={() => { setEditBoardModelOld(model.name); setEditBoardModelNew(model.name); }}
                                                     >
-                                                        {model}
-                                                        {allActiveParts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
+                                                        {model.name}
+                                                        {allActiveParts.some(p => p.model_id === model.id && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -1595,10 +1614,10 @@ export default function AdminPage(props: PageProps) {
                                                     <Col xs={12} lg={4}>
                                                         {pinnedStreet && (
                                                             <Badge
-                                                                bg={editingPart.platform?.includes(pinnedStreet.name) ? "primary" : "none"}
+                                                                bg={editingPart.platform_id === pinnedStreet.id ? "primary" : "none"}
                                                                 className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
                                                                 style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => toggleArray('platform', pinnedStreet.name, editingPart.platform || [], true)}
+                                                                onClick={() => setEditingPart({ ...editingPart, platform_id: pinnedStreet.id })}
                                                             >
                                                                 {pinnedStreet.name}
                                                             </Badge>
@@ -1607,10 +1626,10 @@ export default function AdminPage(props: PageProps) {
                                                     <Col xs={12} lg={4}>
                                                         {pinnedOffroad && (
                                                             <Badge
-                                                                bg={editingPart.platform?.includes(pinnedOffroad.name) ? "primary" : "none"}
+                                                                bg={editingPart.platform_id === pinnedOffroad.id ? "primary" : "none"}
                                                                 className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
                                                                 style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => toggleArray('platform', pinnedOffroad.name, editingPart.platform || [], true)}
+                                                                onClick={() => setEditingPart({ ...editingPart, platform_id: pinnedOffroad.id })}
                                                             >
                                                                 {pinnedOffroad.name}
                                                             </Badge>
@@ -1619,10 +1638,10 @@ export default function AdminPage(props: PageProps) {
                                                     <Col xs={12} lg={4}>
                                                         {pinnedMisc && (
                                                             <Badge
-                                                                bg={editingPart.platform?.includes(pinnedMisc.name) ? "primary" : "none"}
+                                                                bg={editingPart.platform_id === pinnedMisc.id ? "primary" : "none"}
                                                                 className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
                                                                 style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => toggleArray('platform', pinnedMisc.name, editingPart.platform || [], true)}
+                                                                onClick={() => setEditingPart({ ...editingPart, platform_id: pinnedMisc.id })}
                                                             >
                                                                 {pinnedMisc.name}
                                                             </Badge>
@@ -1639,7 +1658,7 @@ export default function AdminPage(props: PageProps) {
                                                         </div>
                                                         <div className="d-flex flex-wrap gap-2">
                                                             {group1.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                <Badge key={opt.id} role="button" bg={editingPart.platform_id === opt.id ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => setEditingPart({ ...editingPart, platform_id: opt.id })}>
                                                                     {opt.name}
                                                                 </Badge>
                                                             ))}
@@ -1651,7 +1670,7 @@ export default function AdminPage(props: PageProps) {
                                                         </div>
                                                         <div className="d-flex flex-wrap gap-2">
                                                             {group2.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                <Badge key={opt.id} role="button" bg={editingPart.platform_id === opt.id ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => setEditingPart({ ...editingPart, platform_id: opt.id })}>
                                                                     {opt.name}
                                                                 </Badge>
                                                             ))}
@@ -1663,7 +1682,7 @@ export default function AdminPage(props: PageProps) {
                                                         </div>
                                                         <div className="d-flex flex-wrap gap-2">
                                                             {group3.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform?.includes(opt.name) ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => toggleArray('platform', opt.name, editingPart.platform || [], true)}>
+                                                                <Badge key={opt.id} role="button" bg={editingPart.platform_id === opt.id ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => setEditingPart({ ...editingPart, platform_id: opt.id })}>
                                                                     {opt.name}
                                                                 </Badge>
                                                             ))}
@@ -1717,15 +1736,36 @@ export default function AdminPage(props: PageProps) {
                                         <div className="mb-4">
                                             <Form.Label className="small uppercase fw-bold opacity-75 text-light">Selection Summary (Tags)</Form.Label>
                                             <div className="mt-2 p-3 rounded-pill bg-black border border-secondary d-flex align-items-center justify-content-center gap-2 flex-wrap shadow-inner" style={{ minHeight: '52px' }}>
-                                                {(!editingPart.platform || editingPart.platform.length === 0) && !editingPart.fabrication_method_id && !editingPart.category_id && !editingPart.is_oem ? (
+                                                {editingPart.platform_id && (
+                                                    <Badge pill bg="dark" className="border border-info text-info py-2 px-3">
+                                                        {brands.find(b => b.id === editingPart.platform_id)?.name || "Unknown Platform"}
+                                                    </Badge>
+                                                )}
+                                                {editingPart.category_id && (
+                                                    <Badge pill bg="dark" className="border border-info text-info py-2 px-3">
+                                                        {partCategories.find(c => c.id === editingPart.category_id)?.name || "Unknown Category"}
+                                                    </Badge>
+                                                )}
+                                                {editingPart.fabrication_method_id && (
+                                                    <Badge pill bg="dark" className="border border-info text-info py-2 px-3">
+                                                        {fabricationMethods.find(f => f.id === editingPart.fabrication_method_id)?.name || "Unknown Method"}
+                                                    </Badge>
+                                                )}
+                                                {editingPart.is_oem && (
+                                                    <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-2 px-3">OEM</Badge>
+                                                )}
+                                                {editingPart.model_id && (
+                                                    <Badge pill bg="warning" text="dark" className="border border-warning py-2 px-3">
+                                                        {models.find(m => m.id === editingPart.model_id)?.name || editingPart.model_id}
+                                                    </Badge>
+                                                )}
+                                                {!editingPart.model_id && editingPart.board_model && (
+                                                    <Badge pill bg="secondary" text="light" className="border border-dark py-2 px-3">
+                                                        {editingPart.board_model}
+                                                    </Badge>
+                                                )}
+                                                {!editingPart.platform_id && !editingPart.category_id && !editingPart.fabrication_method_id && !editingPart.is_oem && !editingPart.model_id && !editingPart.board_model && (
                                                     <span className="small text-muted opacity-50 italic">No tags selected yet...</span>
-                                                ) : (
-                                                    <>
-                                                        {editingPart.is_oem && <Badge bg="none" className="px-3 py-2 border rounded-pill uppercase small" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }}>OEM</Badge>}
-                                                        {editingPart.category_id && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{partCategories.find(c => c.id === editingPart.category_id)?.name || 'Category'}</Badge>}
-                                                        {editingPart.platform?.map((p: string) => <Badge key={p} bg="primary" className="px-3 py-2 rounded-pill uppercase small">{p}</Badge>)}
-                                                        {editingPart.fabrication_method_id && <Badge bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{fabricationMethods.find(f => f.id === editingPart.fabrication_method_id)?.name || 'Method'}</Badge>}
-                                                    </>
                                                 )}
                                             </div>
                                         </div>
@@ -1740,11 +1780,11 @@ export default function AdminPage(props: PageProps) {
                             </Row>
 
                             <HardwareFields
-                                platform={editingPart.platform || []}
-                                boardModel={editingPart.board_model || null}
+                                brandId={editingPart.platform_id || null}
+                                modelId={editingPart.model_id || editingPart.board_model || null}
                                 needsModelReview={editingPart.needs_model_review || false}
-                                onChangeModel={(m) => setEditingPart({ ...editingPart, board_model: m })}
-                                onChangeNeedsReview={(b) => setEditingPart({ ...editingPart, needs_model_review: b })}
+                                onChangeModel={(m) => setEditingPart(prev => prev ? { ...prev, model_id: m } : null)}
+                                onChangeNeedsReview={(b) => setEditingPart(prev => prev ? { ...prev, needs_model_review: b } : null)}
                             />
                         </Modal.Body>
                         <Modal.Footer className="bg-dark border-secondary p-4">

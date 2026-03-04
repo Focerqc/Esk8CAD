@@ -16,13 +16,16 @@ const mapPartToSchema = (part: Part): PartSchema => {
     return {
         id: part.id ? String(part.id) : "Unknown",
         title: part.title || "Untitled Part",
-        image_url: part.image_src || "",
-        author: "Unknown User", // Assuming author isn't in DB yet, fallback to "Unknown User"
+        image_url: (typeof part.image_src === 'string' ? part.image_src : part.image_src?.[0]) || "",
+        author: part.author || "Unknown User",
         boardPlatform: (part.platform && part.platform.length > 0) ? part.platform[0] : "Misc",
-        tags: [...(part.fabrication_method || [])],
+        tags: [
+            ...(part.type_of_part || []),
+            ...(part.fabrication_method || []),
+            ...(part.board_model ? [part.board_model] : []),
+        ],
         externalUrl: part.external_url || undefined,
         dropboxUrl: part.dropbox_url || undefined,
-        // Optional dropbox link, etc for future use
     }
 }
 
@@ -103,12 +106,13 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     const { parts, isLoading, error } = useParts(activePlatform);
 
     // Fetch specifically assigned relational models for this specific platform
-    const { models: brandModels, isLoading: modelsLoading } = useBrandHardware(activePlatform ? [activePlatform] : []);
+    const { models, isLoading: modelsLoading } = useBrandHardware(activePlatform || null);
+    const brandModels = useMemo(() => models.map(m => m.name), [models]);
     const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
     // Dynamic extraction of Fabrication Methods across all available parts for this page
     const uniqueFabricationMethods = useMemo(() => {
-        return [...new Set(parts.map((p) => (p.fabrication_method || [])).filter(Boolean).flat())].sort((a, b) => a.localeCompare(b)) as string[];
+        return [...new Set(parts.flatMap((p) => p.fabrication_method || []))].sort((a, b) => a.localeCompare(b));
     }, [parts]);
 
     // Checkbox useState object lists
@@ -186,8 +190,8 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     return (
         <>
             {activePlatform && (
-                <Row className="mb-4 pb-4 border-bottom border-secondary">
-                    <Col xs={12} md={9} className="text-start">
+                <div className="mb-4 pb-4 border-bottom border-secondary d-md-flex align-items-start gap-4">
+                    <div className="text-start flex-grow-1">
                         <h2 className="display-4 fw-bold mb-4 text-white text-uppercase" style={{ letterSpacing: '0.1rem' }}>
                             {activePlatform} <span style={{ color: '#0dcaf0' }}>PARTS</span>
                         </h2>
@@ -225,11 +229,11 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                         ) : (
                             <div className="text-muted small fst-italic">No specific hardware models currently registered for this brand.</div>
                         )}
-                    </Col>
+                    </div>
 
-                    {/* Empty placeholder column to enforce layout alignment */}
-                    <Col xs={12} md={3} className="d-none d-md-block"></Col>
-                </Row>
+                    {/* Empty placeholder div to enforce layout alignment equivalent to old Col md=3 */}
+                    <div className="d-none d-md-block" style={{ width: '25%' }}></div>
+                </div>
             )}
 
             <div className="searchArea mb-5">

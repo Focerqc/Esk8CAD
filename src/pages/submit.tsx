@@ -72,14 +72,14 @@ const partSchema = z.object({
     externalUrl: z.string().url("Must be a valid URL").max(400, "URL too long").or(z.literal("")),
     title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
     imageSrc: z.string().url("Must be a valid URL").or(z.literal("")),
-    platform: z.array(z.string()).min(1, "Select at least 1 manufacturer (platform)").max(1, "Only 1 manufacturer allowed"),
+    platformId: z.string().min(1, "Please select a manufacturer (platform)"),
     categoryId: z.string().min(1, "Please select a part category"),
     fabricationMethodId: z.string().min(1, "Please select a fabrication method"),
     dropboxUrl: z.string().url("Must be a valid URL").or(z.literal("")),
     isOem: z.boolean(),
     author: z.string().optional(),
     submittedBy: z.string().optional(),
-    boardModel: z.string().nullable().optional(),
+    modelId: z.string().nullable().optional(), // Can be UUID or custom string
     needsModelReview: z.boolean().optional(),
 })
 
@@ -91,7 +91,6 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 
 // --- Sub-Component: PartForm ---
-// Using React Hook Form context indirectly via props passed from standard mapping
 const PartFormItem = ({
     index,
     control,
@@ -122,25 +121,12 @@ const PartFormItem = ({
     const urlValue = partValues?.url || ""
     const imageSrcValue = partValues?.imageSrc || ""
     const isOemValue = partValues?.isOem || false
-    const selectedPlatforms = partValues?.platform || []
+    const selectedPlatformId = partValues?.platformId || ""
     const selectedCategoryId = partValues?.categoryId || ""
     const selectedFabricationMethodId = partValues?.fabricationMethodId || ""
     const authorValue = partValues?.author || ""
-    const boardModelValue = partValues?.boardModel || null
+    const modelIdValue = partValues?.modelId || null
     const needsModelReviewValue = partValues?.needsModelReview || false
-
-    const toggleArrayItem = (fieldPath: string, value: string, currentArray: string[], isSingle: boolean = false) => {
-        if (currentArray.includes(value)) {
-            setValue(fieldPath, isSingle ? [] : currentArray.filter(v => v !== value), { shouldValidate: true })
-        } else {
-            if (isSingle) {
-                setValue(fieldPath, [value], { shouldValidate: true })
-                setActiveTab(null) // auto-dismiss the popup
-            } else {
-                setValue(fieldPath, [...currentArray, value], { shouldValidate: true })
-            }
-        }
-    }
 
     const handleFetchMetadata = async () => {
         if (!urlValue) {
@@ -175,7 +161,6 @@ const PartFormItem = ({
 
                 if (!imageSrcValue && (metadata.image?.url || metadata.logo?.url)) setValue(`parts.${index}.imageSrc`, metadata.image?.url || metadata.logo?.url, { shouldValidate: true });
                 if (!partValues?.externalUrl) setValue(`parts.${index}.externalUrl`, urlValue, { shouldValidate: true });
-                // We intentionally leave Categories entirely empty for manual selection.
             }
         } catch (e) {
             console.error("Scraper Error:", e);
@@ -384,7 +369,7 @@ const PartFormItem = ({
                                 .filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc"].includes(p.name))
                                 .sort((a, b) => a.name.localeCompare(b.name));
 
-                            const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= '0' && first <= 'I'; });
+                            const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
                             const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
                             const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
 
@@ -394,10 +379,10 @@ const PartFormItem = ({
                                         <Col xs={12} lg={4}>
                                             {pinnedStreet && (
                                                 <Badge
-                                                    bg={selectedPlatforms.includes(pinnedStreet.name) ? "primary" : "none"}
+                                                    bg={selectedPlatformId === pinnedStreet.id ? "primary" : "none"}
                                                     className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
                                                     style={{ fontSize: "0.85rem" }}
-                                                    onClick={() => toggleArrayItem(`parts.${index}.platform`, pinnedStreet.name, selectedPlatforms, true)}
+                                                    onClick={() => { setValue(`parts.${index}.platformId`, pinnedStreet.id, { shouldValidate: true }); setActiveTab(null); }}
                                                 >
                                                     {pinnedStreet.name}
                                                 </Badge>
@@ -406,10 +391,10 @@ const PartFormItem = ({
                                         <Col xs={12} lg={4}>
                                             {pinnedOffroad && (
                                                 <Badge
-                                                    bg={selectedPlatforms.includes(pinnedOffroad.name) ? "primary" : "none"}
+                                                    bg={selectedPlatformId === pinnedOffroad.id ? "primary" : "none"}
                                                     className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
                                                     style={{ fontSize: "0.85rem" }}
-                                                    onClick={() => toggleArrayItem(`parts.${index}.platform`, pinnedOffroad.name, selectedPlatforms, true)}
+                                                    onClick={() => { setValue(`parts.${index}.platformId`, pinnedOffroad.id, { shouldValidate: true }); setActiveTab(null); }}
                                                 >
                                                     {pinnedOffroad.name}
                                                 </Badge>
@@ -418,10 +403,10 @@ const PartFormItem = ({
                                         <Col xs={12} lg={4}>
                                             {pinnedMisc && (
                                                 <Badge
-                                                    bg={selectedPlatforms.includes(pinnedMisc.name) ? "primary" : "none"}
+                                                    bg={selectedPlatformId === pinnedMisc.id ? "primary" : "none"}
                                                     className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
                                                     style={{ fontSize: "0.85rem" }}
-                                                    onClick={() => toggleArrayItem(`parts.${index}.platform`, pinnedMisc.name, selectedPlatforms, true)}
+                                                    onClick={() => { setValue(`parts.${index}.platformId`, pinnedMisc.id, { shouldValidate: true }); setActiveTab(null); }}
                                                 >
                                                     {pinnedMisc.name}
                                                 </Badge>
@@ -440,10 +425,10 @@ const PartFormItem = ({
                                                 {group1.map(opt => (
                                                     <Badge
                                                         key={opt.id}
-                                                        bg={selectedPlatforms.includes(opt.name) ? "primary" : "none"}
+                                                        bg={selectedPlatformId === opt.id ? "primary" : "none"}
                                                         className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
                                                         style={{ minWidth: "46%" }}
-                                                        onClick={() => toggleArrayItem(`parts.${index}.platform`, opt.name, selectedPlatforms, true)}
+                                                        onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setActiveTab(null); }}
                                                     >
                                                         {opt.name}
                                                     </Badge>
@@ -458,10 +443,10 @@ const PartFormItem = ({
                                                 {group2.map(opt => (
                                                     <Badge
                                                         key={opt.id}
-                                                        bg={selectedPlatforms.includes(opt.name) ? "primary" : "none"}
+                                                        bg={selectedPlatformId === opt.id ? "primary" : "none"}
                                                         className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
                                                         style={{ minWidth: "46%" }}
-                                                        onClick={() => toggleArrayItem(`parts.${index}.platform`, opt.name, selectedPlatforms, true)}
+                                                        onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setActiveTab(null); }}
                                                     >
                                                         {opt.name}
                                                     </Badge>
@@ -476,10 +461,10 @@ const PartFormItem = ({
                                                 {group3.map(opt => (
                                                     <Badge
                                                         key={opt.id}
-                                                        bg={selectedPlatforms.includes(opt.name) ? "primary" : "none"}
+                                                        bg={selectedPlatformId === opt.id ? "primary" : "none"}
                                                         className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
                                                         style={{ minWidth: "46%" }}
-                                                        onClick={() => toggleArrayItem(`parts.${index}.platform`, opt.name, selectedPlatforms, true)}
+                                                        onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setActiveTab(null); }}
                                                     >
                                                         {opt.name}
                                                     </Badge>
@@ -514,7 +499,7 @@ const PartFormItem = ({
                     />
                     <Controller
                         control={control}
-                        name={`parts.${index}.platform`}
+                        name={`parts.${index}.platformId`}
                         render={({ fieldState }) => (fieldState.error ? <div className="text-danger small mt-2 fw-bold">{fieldState.error.message}</div> : <></>)}
                     />
                     <Controller
@@ -525,14 +510,14 @@ const PartFormItem = ({
 
                     {/* Taxonomy Summary Pills */}
                     <div className="mt-4 p-3 rounded-pill bg-black border border-secondary d-flex align-items-center justify-content-center gap-2 flex-wrap shadow-inner" style={{ minHeight: '52px' }}>
-                        {selectedPlatforms.length === 0 && !selectedFabricationMethodId && !selectedCategoryId && !isOemValue ? (
+                        {!selectedPlatformId && !selectedFabricationMethodId && !selectedCategoryId && !isOemValue ? (
                             <span className="small text-muted opacity-50 italic">No tags selected yet...</span>
                         ) : (
                             <>
                                 {isOemValue && <Badge bg="none" className="px-3 py-2 border rounded-pill uppercase small" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }}>OEM</Badge>}
-                                {selectedCategoryId && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{categories.find(c => c.id === selectedCategoryId)?.name || 'Processing'}</Badge>}
-                                {selectedPlatforms.map((p: string) => <Badge key={p} bg="primary" className="px-3 py-2 rounded-pill uppercase small">{p}</Badge>)}
-                                {selectedFabricationMethodId && <Badge bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{fabricationMethods.find(f => f.id === selectedFabricationMethodId)?.name || 'Processing'}</Badge>}
+                                {selectedCategoryId && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{categories.find(c => c.id === selectedCategoryId)?.name || 'Category'}</Badge>}
+                                {selectedPlatformId && <Badge bg="primary" className="px-3 py-2 rounded-pill uppercase small">{platforms.find(p => p.id === selectedPlatformId)?.name || 'Platform'}</Badge>}
+                                {selectedFabricationMethodId && <Badge bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{fabricationMethods.find(f => f.id === selectedFabricationMethodId)?.name || 'Method'}</Badge>}
                             </>
                         )}
                     </div>
@@ -562,10 +547,10 @@ const PartFormItem = ({
                 </Row>
 
                 <HardwareFields
-                    platform={selectedPlatforms}
-                    boardModel={boardModelValue}
+                    brandId={selectedPlatformId}
+                    modelId={modelIdValue}
                     needsModelReview={needsModelReviewValue}
-                    onChangeModel={(m) => setValue(`parts.${index}.boardModel`, m, { shouldValidate: true })}
+                    onChangeModel={(m) => setValue(`parts.${index}.modelId`, m, { shouldValidate: true })}
                     onChangeNeedsReview={(b) => setValue(`parts.${index}.needsModelReview`, b, { shouldValidate: true })}
                 />
             </Card.Body>
@@ -584,7 +569,7 @@ const SubmitPage: React.FC<PageProps> = () => {
     const [isTaxonomyLoading, setIsTaxonomyLoading] = useState(true)
 
     // Setup React Hook Form native integration
-    const { control, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<FormValues>({
+    const { control, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
             honeypot: "", // Empty to start
@@ -594,14 +579,14 @@ const SubmitPage: React.FC<PageProps> = () => {
                 externalUrl: "",
                 title: "",
                 imageSrc: "",
-                platform: [],
+                platformId: "",
                 categoryId: "",
                 fabricationMethodId: "",
                 dropboxUrl: "",
                 isOem: false,
                 author: "",
                 submittedBy: "",
-                boardModel: null,
+                modelId: null,
                 needsModelReview: false
             }]
         }
@@ -624,11 +609,11 @@ const SubmitPage: React.FC<PageProps> = () => {
             try {
                 const { data: pData } = await client.from('brands').select('id, name').order('name');
                 const { data: catData } = await client.from('part_categories').select('id, name').order('name');
-                const { data: cData } = await client.from('fabrication_methods').select('id, name').order('name');
+                const { data: fData } = await client.from('fabrication_methods').select('id, name').order('name');
                 if (isMounted) {
                     if (pData && pData.length > 0) setPlatforms(pData);
                     if (catData && catData.length > 0) setCategories(catData);
-                    if (cData && cData.length > 0) setFabricationMethods(cData);
+                    if (fData && fData.length > 0) setFabricationMethods(fData);
                 }
             } catch (err) {
                 console.error("Failed to fetch taxonomy:", err);
@@ -645,7 +630,6 @@ const SubmitPage: React.FC<PageProps> = () => {
         // 1. Silent Spam Check (Honeypot)
         if (data.honeypot) {
             console.warn("Spam bot detected via honeypot field. Silently aborting.");
-            // Reset and fake success to misdirect the bot
             reset();
             setStatus('success');
             setMessage("Part(s) submitted for review.");
@@ -660,25 +644,48 @@ const SubmitPage: React.FC<PageProps> = () => {
             const client = getSupabaseClient();
             if (!client) throw new Error("Supabase client failed to initialize.");
 
-            // Map strictly to PostgREST schema, applying defaults
-            const payloads = data.parts.map(p => ({
-                title: p.title,
-                platform: p.platform,
-                category_id: p.categoryId,
-                fabrication_method_id: p.fabricationMethodId,
-                external_url: p.externalUrl || p.url,
-                image_src: p.imageSrc || null,
-                dropbox_url: p.dropboxUrl || null,
-                is_oem: p.isOem,
-                author: p.author || null,
-                submitted_by: p.submittedBy && p.submittedBy.trim().length > 0 ? p.submittedBy.trim() : 'Anonymous',
-                board_model: p.boardModel || null,
-                needs_model_review: p.needsModelReview || false,
-                status: 'pending' // Enforce rule for insertions directly here
-            }));
+            const processedParts = [];
+
+            // Parallel individual processing in case of new models
+            for (const p of data.parts) {
+                let finalModelId = p.modelId;
+
+                // Handle New Board Model Insertion
+                if (p.needsModelReview && p.modelId && p.platformId) {
+                    // It's a string, not a UUID
+                    const { data: newModel, error: modelError } = await client
+                        .from('models')
+                        .insert([{ name: p.modelId, brand_id: p.platformId }])
+                        .select()
+                        .single();
+
+                    if (!modelError && newModel) {
+                        finalModelId = newModel.id;
+                    } else {
+                        console.warn("Model insertion failed, falling back to string in board_model:", modelError);
+                    }
+                }
+
+                processedParts.push({
+                    title: p.title,
+                    platform_id: p.platformId,
+                    category_id: p.categoryId,
+                    fabrication_method_id: p.fabricationMethodId,
+                    external_url: p.externalUrl || p.url,
+                    image_src: p.imageSrc || null,
+                    dropbox_url: p.dropboxUrl || null,
+                    is_oem: p.isOem,
+                    author: p.author || null,
+                    submitted_by: p.submittedBy && p.submittedBy.trim().length > 0 ? p.submittedBy.trim() : 'Anonymous',
+                    model_id: (finalModelId && finalModelId.length === 36) ? finalModelId : null,
+                    board_model: (!finalModelId || finalModelId.length !== 36) ? finalModelId : null,
+                    needs_model_review: p.needsModelReview || false,
+                    status: 'pending'
+                });
+            }
 
             // Send standard anon DB insert
-            const { error: insertError } = await client.from('parts').insert(payloads);
+            const { error: insertError } = await client.from('parts').insert(processedParts);
 
             if (insertError) {
                 throw new Error(insertError.message || "Unknown database rejection.");
@@ -692,9 +699,9 @@ const SubmitPage: React.FC<PageProps> = () => {
                 honeypot: "",
                 parts: [{
                     id: Math.random().toString(36).substr(2, 9),
-                    url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
+                    url: "", externalUrl: "", title: "", imageSrc: "", platformId: "",
                     categoryId: "", fabricationMethodId: "", dropboxUrl: "", isOem: false,
-                    author: "", submittedBy: "", boardModel: null, needsModelReview: false
+                    author: "", submittedBy: "", modelId: null, needsModelReview: false
                 }]
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -789,23 +796,26 @@ const SubmitPage: React.FC<PageProps> = () => {
                                                     className="py-3 border-dashed"
                                                     onClick={() => append({
                                                         id: Math.random().toString(36).substr(2, 9),
-                                                        url: "", externalUrl: "", title: "", imageSrc: "", platform: [],
+                                                        url: "", externalUrl: "", title: "", imageSrc: "", platformId: "",
                                                         categoryId: "", fabricationMethodId: "", dropboxUrl: "", isOem: false,
-                                                        author: "", submittedBy: "", boardModel: null, needsModelReview: false
+                                                        author: "", submittedBy: "", modelId: null, needsModelReview: false
                                                     })}
                                                     disabled={status === 'submitting'}
                                                 >
                                                     + Attach Another Link
                                                 </Button>
                                             )}
+
                                             <Button
+                                                type="submit"
                                                 variant="success"
                                                 size="lg"
-                                                type="submit"
-                                                className="py-3 fw-bold shadow-lg submit-button"
+                                                className="py-3 fw-bold shadow-lg"
                                                 disabled={status === 'submitting'}
                                             >
-                                                {status === 'submitting' ? <><Spinner size="sm" className="me-2" animation="border" /> Submitting sequence...</> : "Submit Sequence to Admin"}
+                                                {status === 'submitting' ? (
+                                                    <><Spinner animation="border" size="sm" className="me-2" /> Submitting...</>
+                                                ) : 'Submit Sequence to Admin'}
                                             </Button>
                                         </div>
                                     </>
@@ -814,9 +824,10 @@ const SubmitPage: React.FC<PageProps> = () => {
                         )}
                     </ClientOnly>
                 </Container>
+                <SiteFooter />
             </div>
         </AppErrorBoundary>
     )
 }
 
-export default SubmitPage
+export default SubmitPage;

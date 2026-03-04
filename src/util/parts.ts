@@ -44,10 +44,13 @@ export const useParts = (platform?: string, category?: string) => {
       }
 
       try {
-        let query = client.from('parts').select('*').eq('status', 'approved').eq('is_hidden', false).order('created_at', { ascending: false });
+        let query = client.from('parts').select('*, brands!inner(name), part_categories!left(name), fabrication_methods!left(name), models!left(name)')
+          .eq('status', 'approved')
+          .eq('is_hidden', false)
+          .order('created_at', { ascending: false });
 
         if (platform) {
-          query = query.contains('platform', [platform]);
+          query = query.ilike('brands.name', platform);
         }
 
         let activeCategory = category;
@@ -60,7 +63,7 @@ export const useParts = (platform?: string, category?: string) => {
 
         const mappedCategory = mapSlugToDbCategory(activeCategory);
         if (mappedCategory) {
-          query = query.contains('type_of_part', [mappedCategory]);
+          query = query.ilike('part_categories.name', mappedCategory);
         }
 
         const { data, error: sbError } = await query;
@@ -72,18 +75,27 @@ export const useParts = (platform?: string, category?: string) => {
 
         if (mounted) {
           const structuredParts: Part[] = (data || []).map((part: any) => {
-            const types = part.type_of_part || [];
+            const types = [];
+            if (part.part_categories?.name) types.push(part.part_categories.name);
+            else if (part.type_of_part && part.type_of_part.length) types.push(...part.type_of_part);
+
             if (part.is_oem && !types.includes('OEM')) {
               types.push('OEM');
             }
+
+            const pBrand = part.brands?.name ? [part.brands.name] : (part.platform || []);
+            const pFab = part.fabrication_methods?.name ? [part.fabrication_methods.name] : (part.fabrication_method || []);
+
             return {
               id: part.id,
               title: part.title || "Unknown Part",
               image_src: part.image_src || "",
               external_url: part.external_url || "",
-              platform: part.platform || [],
+              platform: pBrand,
               type_of_part: types,
-              fabrication_method: part.fabrication_method || [],
+              fabrication_method: pFab,
+              board_model: part.models?.name || part.board_model || "",
+              author: part.author || part.submitted_by || "Unknown User",
               specs: part.specs || {},
               created_at: part.created_at,
               is_oem: part.is_oem || false,
