@@ -42,7 +42,7 @@ const TechnicalTagsLinks: React.FC = () => {
                 <Button
                     key={category.id}
                     variant="outline-success"
-                    href={`/parts/tags/${category.name.toLowerCase().replace(/\s+/g, '-')}`}
+                    href={`/tags/${category.name.toLowerCase().replace(/\s+/g, '-')}`}
                     className="px-3 py-1 border-1 fw-semibold"
                     style={{
                         fontSize: '0.85rem',

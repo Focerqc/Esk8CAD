@@ -43,7 +43,13 @@ export function useBrandHardware(brandId: string | null) {
                 if (fetchError) throw fetchError;
 
                 if (isMounted && data) {
-                    setModels(data as Model[]);
+                    const mapped = (data as any[]).map(m => ({
+                        ...m,
+                        name: m.name || 'Unnamed Model',
+                        description: m.description || m.description_text || m.overview_text || '',
+                        image_url: m.image_url || 'https://vupaclakcmrkzmrgmfou.supabase.co/storage/v1/object/public/brand-assets/placeholder.png'
+                    }));
+                    setModels(mapped);
                 }
             } catch (err: any) {
                 if (isMounted) setError(err);

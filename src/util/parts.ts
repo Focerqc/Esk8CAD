@@ -44,27 +44,13 @@ export const useParts = (platform?: string, category?: string) => {
       }
 
       try {
-        let query = client.from('parts').select('*, brands!inner(name), part_categories!left(name), fabrication_methods!left(name), models!left(name)')
+        let query = client.from('parts').select('*, brands!left(name), part_categories!left(name), fabrication_methods!left(name), models!left(name)')
           .eq('status', 'approved')
           .eq('is_hidden', false)
           .order('created_at', { ascending: false });
 
-        if (platform) {
-          query = query.ilike('brands.name', platform);
-        }
-
-        let activeCategory = category;
-        if (!activeCategory && typeof window !== 'undefined') {
-          const path = window.location.pathname.toLowerCase();
-          if (path.includes('/parts/tags/')) {
-            activeCategory = path.split('/parts/tags/')[1].replace(/\/$/, '');
-          }
-        }
-
-        const mappedCategory = mapSlugToDbCategory(activeCategory);
-        if (mappedCategory) {
-          query = query.ilike('part_categories.name', mappedCategory);
-        }
+        // If a platform is specified, we'll fetch then filter in JS to avoid malformed PostgREST 'or' logic tree errors
+        // especially when mixing legacy arrays and joined tables.
 
         const { data, error: sbError } = await query;
 
@@ -74,7 +60,7 @@ export const useParts = (platform?: string, category?: string) => {
         }
 
         if (mounted) {
-          const structuredParts: Part[] = (data || []).map((part: any) => {
+          let structuredParts: Part[] = (data || []).map((part: any) => {
             const types = [];
             if (part.part_categories?.name) types.push(part.part_categories.name);
             else if (part.type_of_part && part.type_of_part.length) types.push(...part.type_of_part);
@@ -102,6 +88,32 @@ export const useParts = (platform?: string, category?: string) => {
               dropbox_url: part.dropbox_url || undefined
             };
           });
+
+          // Client-side filtering for platform to handle hybrid schema and case-insensitivity
+          if (platform && platform !== 'all') {
+            const target = platform.toLowerCase();
+            structuredParts = structuredParts.filter(p =>
+              p.platform?.some(bp => bp.toLowerCase() === target) ||
+              p.board_model?.toLowerCase().includes(target)
+            );
+          }
+
+          // Restore category filtering in JS
+          let activeCategory = category;
+          if (!activeCategory && typeof window !== 'undefined') {
+            const path = window.location.pathname.toLowerCase();
+            if (path.includes('/tags/')) {
+              activeCategory = path.split('/tags/')[1].replace(/\/$/, '');
+            }
+          }
+
+          const mappedCategory = mapSlugToDbCategory(activeCategory);
+          if (mappedCategory) {
+            const targetCat = mappedCategory.toLowerCase();
+            structuredParts = structuredParts.filter(p =>
+              p.type_of_part?.some(t => t.toLowerCase() === targetCat)
+            );
+          }
 
           setParts(structuredParts);
           setError(null);

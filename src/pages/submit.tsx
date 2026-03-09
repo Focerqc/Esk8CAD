@@ -6,13 +6,27 @@ const GlobalStyles = () => (
             __html: `
             .bg-secondary { background-color: #121417 !important; }
             .border-secondary { border-color: #24282d !important; }
-            .input-contrast { background-color: #2b3035 !important; border-color: #495057 !important; color: #fff !important; }
-            .input-contrast:focus { background-color: #32383e !important; color: #fff !important; border-color: #0dcaf0 !important; box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25) !important; }
-            .input-contrast::placeholder { color: rgba(255, 255, 255, 0.45) !important; }
-            .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06) !important; }
+            .input-contrast { background-color: #0b0e14 !important; border: 1px solid #24282d !important; color: #fff !important; }
+            .input-contrast:focus { background-color: #0b0e14 !important; color: #fff !important; border-color: #0dcaf0 !important; box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25) !important; }
+            .input-contrast::placeholder { color: rgba(255, 255, 255, 0.25) !important; }
+            .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2) !important; }
             .uppercase { text-transform: uppercase; }
             .letter-spacing-1 { letter-spacing: 1px; }
             .cursor-pointer { cursor: pointer; }
+            
+            /* Taxonomy Button Contrast Fix */
+            .taxonomy-btn { background: #0b0e14 !important; border: 1px solid #24282d !important; color: #dee2e6 !important; font-weight: 800 !important; text-transform: uppercase !important; font-size: 0.8rem !important; padding: 0.75rem 1.25rem !important; letter-spacing: 0.05em !important; }
+            .taxonomy-btn:hover { border-color: #0dcaf0 !important; color: #fff !important; }
+            .taxonomy-btn.active { background: #0dcaf0 !important; border-color: #0dcaf0 !important; color: #000 !important; }
+            
+            /* Fix invisible autofill in some browsers */
+            input:-webkit-autofill,
+            input:-webkit-autofill:hover, 
+            input:-webkit-autofill:focus {
+              -webkit-text-fill-color: #fff !important;
+              -webkit-box-shadow: 0 0 0px 1000px #0b0e14 inset !important;
+              transition: background-color 5000s ease-in-out 0s;
+            }
         ` }} />
     </>
 );
@@ -26,6 +40,7 @@ import SiteFooter from "../components/SiteFooter"
 import SiteNavbar from "../components/SiteNavbar"
 import ClientOnly from "../components/ClientOnly"
 import HardwareFields from "../components/Forms/HardwareFields"
+import { useBrandHardware } from "../hooks/useBrandHardware"
 import { getSupabaseClient } from '../lib/supabase'
 
 // --- Error Boundary ---
@@ -68,14 +83,14 @@ interface Taxonomy {
 // --- Validation Schema ---
 const partSchema = z.object({
     id: z.string(), // Internal tracking id for the UI array
-    url: z.string().url("Must be a valid URL (e.g., https://printables.com/...)"),
-    externalUrl: z.string().url("Must be a valid URL").max(400, "URL too long").or(z.literal("")),
+    url: z.string().min(3, "Must be a valid link"),
+    externalUrl: z.string().max(400, "URL too long").or(z.literal("")),
     title: z.string().min(5, "Title must be at least 5 characters").max(150, "Title must be less than 150 characters"),
-    imageSrc: z.string().url("Must be a valid URL").or(z.literal("")),
+    imageSrc: z.string().or(z.literal("")),
     platformId: z.string().min(1, "Please select a manufacturer (platform)"),
     categoryId: z.string().min(1, "Please select a part category"),
     fabricationMethodId: z.string().min(1, "Please select a fabrication method"),
-    dropboxUrl: z.string().url("Must be a valid URL").or(z.literal("")),
+    dropboxUrl: z.string().or(z.literal("")),
     isOem: z.boolean(),
     author: z.string().optional(),
     submittedBy: z.string().optional(),
@@ -127,6 +142,15 @@ const PartFormItem = ({
     const authorValue = partValues?.author || ""
     const modelIdValue = partValues?.modelId || null
     const needsModelReviewValue = partValues?.needsModelReview || false
+
+    // Fetch models for this brand to resolve names
+    const { models: brandModels } = useBrandHardware(selectedPlatformId)
+
+    const selectedModelName = React.useMemo(() => {
+        if (!modelIdValue) return null;
+        const found = brandModels.find(m => m.id === modelIdValue);
+        return found ? found.name : modelIdValue; // Fallback to ID/Custom Name if not found in fetched list
+    }, [brandModels, modelIdValue]);
 
     const handleFetchMetadata = async () => {
         if (!urlValue) {
@@ -338,10 +362,10 @@ const PartFormItem = ({
                 {/* 4. Taxonomy Selectors */}
                 <div className="my-5">
 
-                    <div className="d-flex gap-2 mb-2">
-                        <Button variant={activeTab === 'platform' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'platform' ? null : 'platform')}>Manufacturer (Platform) *</Button>
-                        <Button variant={activeTab === 'category' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'category' ? null : 'category')}>Part Category *</Button>
-                        <Button variant={activeTab === 'method' ? 'primary' : 'outline-light'} onClick={() => setActiveTab(activeTab === 'method' ? null : 'method')}>Fabrication Method *</Button>
+                    <div className="d-flex flex-wrap gap-2 mb-2">
+                        <Button className={`taxonomy-btn ${activeTab === 'platform' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'platform' ? null : 'platform')}>Manufacturer (Platform) *</Button>
+                        <Button className={`taxonomy-btn ${activeTab === 'category' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'category' ? null : 'category')}>Part Category *</Button>
+                        <Button className={`taxonomy-btn ${activeTab === 'method' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'method' ? null : 'method')}>Fabrication Method *</Button>
                     </div>
 
                     <div className={`mt-3 p-4 rounded bg-secondary border border-secondary shadow-sm ${!activeTab ? 'd-none' : ''}`}>
@@ -515,8 +539,17 @@ const PartFormItem = ({
                         ) : (
                             <>
                                 {isOemValue && <Badge bg="none" className="px-3 py-2 border rounded-pill uppercase small" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }}>OEM</Badge>}
-                                {selectedCategoryId && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{categories.find(c => c.id === selectedCategoryId)?.name || 'Category'}</Badge>}
                                 {selectedPlatformId && <Badge bg="primary" className="px-3 py-2 rounded-pill uppercase small">{platforms.find(p => p.id === selectedPlatformId)?.name || 'Platform'}</Badge>}
+                                {modelIdValue && (
+                                    <Badge
+                                        bg={needsModelReviewValue ? "warning" : "light"}
+                                        text="dark"
+                                        className="px-3 py-2 border rounded-pill uppercase small border-secondary"
+                                    >
+                                        {needsModelReviewValue ? `🚩 ${modelIdValue}` : selectedModelName}
+                                    </Badge>
+                                )}
+                                {selectedCategoryId && <Badge bg="none" className="px-3 py-2 border border-success text-success rounded-pill uppercase small" style={{ backgroundColor: 'rgba(25, 135, 84, 0.1)' }}>{categories.find(c => c.id === selectedCategoryId)?.name || 'Category'}</Badge>}
                                 {selectedFabricationMethodId && <Badge bg="none" className="px-3 py-2 border border-primary text-primary rounded-pill uppercase small" style={{ backgroundColor: 'rgba(13, 110, 253, 0.1)' }}>{fabricationMethods.find(f => f.id === selectedFabricationMethodId)?.name || 'Method'}</Badge>}
                             </>
                         )}
@@ -653,27 +686,49 @@ const SubmitPage: React.FC<PageProps> = () => {
                 // Handle New Board Model Insertion
                 if (p.needsModelReview && p.modelId && p.platformId) {
                     // It's a string, not a UUID
+                    const modelName = p.modelId.trim();
+                    const brandObj = (platforms as any[]).find(plat => plat.id === p.platformId);
+                    const brandPrefix = brandObj ? `${brandObj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-` : '';
+
+                    const genSlug = (n: string) => n.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+                    const modelSlug = `${brandPrefix}${genSlug(modelName)}`;
+
                     const { data: newModel, error: modelError } = await client
                         .from('models')
-                        .insert([{ name: p.modelId, brand_id: p.platformId }])
+                        .insert([{
+                            name: modelName,
+                            brand_id: p.platformId,
+                            slug: modelSlug
+                        }])
                         .select()
                         .single();
 
                     if (!modelError && newModel) {
                         finalModelId = newModel.id;
                     } else {
-                        console.warn("Model insertion failed, falling back to string in board_model:", modelError);
+                        console.warn("Model insertion failed:", modelError);
+                        // Fallback: we'll store it as a string in board_model below
                     }
                 }
+
+                // normalize urls
+                const normalizeUrl = (u: string) => {
+                    if (!u) return null;
+                    const trimmed = u.trim();
+                    if (!trimmed) return null;
+                    if (trimmed.startsWith('http') || trimmed.startsWith('//')) return trimmed;
+                    if (trimmed.includes('.')) return `https://${trimmed}`;
+                    return trimmed;
+                };
 
                 processedParts.push({
                     title: p.title,
                     platform_id: p.platformId,
                     category_id: p.categoryId,
                     fabrication_method_id: p.fabricationMethodId,
-                    external_url: p.externalUrl || p.url,
-                    image_src: p.imageSrc || null,
-                    dropbox_url: p.dropboxUrl || null,
+                    external_url: normalizeUrl(p.externalUrl) || normalizeUrl(p.url),
+                    image_src: normalizeUrl(p.imageSrc) || null,
+                    dropbox_url: normalizeUrl(p.dropboxUrl) || null,
                     is_oem: p.isOem,
                     author: p.author || null,
                     submitted_by: p.submittedBy && p.submittedBy.trim().length > 0 ? p.submittedBy.trim() : 'Anonymous',

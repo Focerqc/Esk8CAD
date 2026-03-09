@@ -46,6 +46,9 @@ export interface Brand {
     id: string;
     name: string;
     slug?: string;
+    image_url?: string | null;
+    description?: string | null;
+    safe_slug?: string;
     created_at?: string;
 }
 
@@ -53,6 +56,8 @@ export interface Model {
     id: string;
     name: string;
     brand_id: string;
+    image_url?: string | null;
+    description?: string | null;
     created_at?: string;
 }
 

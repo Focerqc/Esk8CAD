@@ -1,6 +1,6 @@
 import React, { ChangeEvent, useEffect, useRef, useState, useMemo } from "react"
-import { Alert, Button, ButtonGroup, Form, Stack, ToggleButton, Row, Col, Card } from "react-bootstrap"
-import { Link } from "gatsby"
+import { Alert, Button, ButtonGroup, Form, Stack, ToggleButton, Row, Col, Card, Badge } from "react-bootstrap"
+import { Link, navigate } from "gatsby"
 import { FaArrowRotateLeft } from "react-icons/fa6"
 import windowIsDefined from "../hooks/windowIsDefined"
 import CopyLinkButton from "./CopyLinkButton"
@@ -8,6 +8,7 @@ import PartCard, { PartSchema } from "./PartCard"
 import { useParts } from "../util/parts"
 import { useBrandHardware } from "../hooks/useBrandHardware"
 import { Part } from "../lib/supabase"
+import { useBoardHook } from "../hooks/useBoardHook"
 
 /**
  * Maps Supabase `Part` exactly to the new `PartSchema` expected by `PartCard`
@@ -33,61 +34,70 @@ const mapPartToSchema = (part: Part): PartSchema => {
 const getPlatformFromURL = () => {
     if (!windowIsDefined()) return undefined;
     const path = window.location.pathname.toLowerCase();
+    const segments = path.split('/').filter(Boolean);
 
-    // Mapping URL paths to DB Platform items
-    if (path.includes('/parts/street')) return 'Street (DIY/Generic)';
-    if (path.includes('/parts/offroad')) return 'Off-Road (DIY/Generic)';
-    if (path.includes('/parts/3dservisas')) return '3D Servisas';
-    if (path.includes('/parts/acedeck')) return 'Acedeck';
-    if (path.includes('/parts/apex')) return 'Apex Boards';
-    if (path.includes('/parts/backfire')) return 'Backfire';
-    if (path.includes('/parts/bioboards')) return 'Bioboards';
-    if (path.includes('/parts/boardnamics')) return 'Boardnamics';
-    if (path.includes('/parts/defiant')) return 'Defiant Board Society';
-    if (path.includes('/parts/evolve')) return 'Evolve';
-    if (path.includes('/parts/exway')) return 'Exway';
-    if (path.includes('/parts/fluxmotion')) return 'Fluxmotion';
-    if (path.includes('/parts/hoyt')) return 'Hoyt St';
-    if (path.includes('/parts/lacroix')) return 'Lacroix Boards';
-    if (path.includes('/parts/linnpower')) return 'Linnpower';
-    if (path.includes('/parts/mboards')) return 'MBoards';
-    if (path.includes('/parts/mbs')) return 'MBS';
-    if (path.includes('/parts/meepo')) return 'Meepo';
-    if (path.includes('/parts/newbee')) return 'Newbee';
-    if (path.includes('/parts/propel')) return 'Propel';
-    if (path.includes('/parts/radium')) return 'Radium Performance';
-    if (path.includes('/parts/stooge')) return 'Stooge Raceboards';
-    if (path.includes('/parts/summerboard')) return 'Summerboard';
-    if (path.includes('/parts/trampa')) return 'Trampa Boards';
-    if (path.includes('/parts/wowgo')) return 'Wowgo';
-    if (path.includes('/parts/misc')) return 'Misc';
+    if (segments.length >= 1) {
+        let platformKey = segments[0];
+
+        // If using universal brand route
+        if (platformKey === 'brand' && segments.length >= 2) {
+            platformKey = segments[1];
+        } else {
+            // Skip non-platform root pages
+            const nonPlatformRoots = ['admin', 'submit', 'id', 'oem', 'resources', 'tags', 'fosterqc', 'parts'];
+            if (nonPlatformRoots.includes(platformKey)) return undefined;
+        }
+
+        // Handle special cases
+        if (platformKey === 'street') return 'Street (DIY/Generic)';
+        if (platformKey === 'offroad') return 'Off-Road (DIY/Generic)';
+        if (platformKey === '3dservisas') return '3D Servisas';
+        if (platformKey === 'defiant') return 'Defiant Board Society';
+        if (platformKey === 'hoyt') return 'Hoyt St';
+        if (platformKey === 'lacroix') return 'Lacroix Boards';
+        if (platformKey === 'linnpower') return 'Linnpower';
+        if (platformKey === 'mboards') return 'MBoards';
+        if (platformKey === 'radium') return 'Radium Performance';
+        if (platformKey === 'stooge') return 'Stooge Raceboards';
+        if (platformKey === 'trampa') return 'Trampa Boards';
+        if (platformKey === 'wowgo') return 'Wowgo';
+
+        // Fallback: convert hyphens to spaces and title case
+        return platformKey.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
 
     return undefined;
 };
 
-// Skeleton Placeholder
+// Helper to deduce model from URL (/brand/models/model-name)
+const getModelFromURL = () => {
+    if (!windowIsDefined()) return null;
+    const path = window.location.pathname.toLowerCase();
+    const segments = path.split('/').filter(Boolean);
+    const isUniversal = segments[0] === 'brand';
+    const modelsIndex = isUniversal ? 2 : 1;
+    const modelNameIndex = isUniversal ? 3 : 2;
+
+    if (segments.length > modelNameIndex && segments[modelsIndex] === 'models') {
+        const rawModel = segments[modelNameIndex];
+        return rawModel.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    }
+    return null;
+};
+
+// ... SkeletonGrid ...
+
 const SkeletonGrid = () => (
-    <Row className="my-5">
-        {Array.from({ length: 6 }).map((_, i) => (
-            <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: "280px" }} key={`skeleton-${i}`}>
-                <Card className="h-100 shadow-sm border-secondary bg-dark w-100 position-relative" aria-hidden="true">
-                    <div className="placeholder-glow" style={{ aspectRatio: "16 / 9", height: "auto", width: "100%" }}>
-                        <div className="placeholder w-100 h-100 bg-secondary" style={{ opacity: 0.2 }}></div>
+    <Row>
+        {[1, 2, 3, 4, 5, 6].map(i => (
+            <Col key={`skeleton-${i}`} xs={12} sm={6} md={4} lg={3} className="mb-4">
+                <Card className="h-100 shadow-sm border-secondary bg-black" style={{ minHeight: '320px', opacity: 0.1 }}>
+                    <div className="card-img-holder placeholder-glow bg-secondary" style={{ aspectRatio: "16 / 9" }}>
+                        <div className="placeholder w-100 h-100"></div>
                     </div>
-                    <Card.Body className="d-flex flex-column">
-                        <div className="placeholder-glow mb-2">
-                            <span className="placeholder col-8 rounded bg-secondary"></span>
-                        </div>
-                        <div className="placeholder-glow mb-3">
-                            <span className="placeholder col-5 rounded bg-secondary"></span>
-                        </div>
-                        <div className="placeholder-glow mb-4">
-                            <span className="placeholder col-4 me-2 rounded bg-secondary"></span>
-                            <span className="placeholder col-3 rounded bg-secondary"></span>
-                        </div>
-                        <div className="mt-auto pt-3 border-top border-secondary placeholder-glow">
-                            <span className="placeholder col-12 btn btn-outline-info disabled" style={{ height: '31px' }}></span>
-                        </div>
+                    <Card.Body className="d-flex flex-column gap-2 p-3">
+                        <div className="placeholder-glow"><span className="placeholder col-8 bg-secondary"></span></div>
+                        <div className="placeholder-glow"><span className="placeholder col-4 bg-secondary"></span></div>
                     </Card.Body>
                 </Card>
             </Col>
@@ -95,242 +105,383 @@ const SkeletonGrid = () => (
     </Row>
 );
 
-/**
- * Creates a collection of elements for the
- * purpose of filtering an items page under
- * `src/pages/parts` using live Supabase data.
- */
 export default ({ platformOverride }: { platformOverride?: string }) => {
-    // Check if platform is explicitly passed or try deriving from URL
-    const activePlatform = platformOverride || getPlatformFromURL();
-    const { parts, isLoading, error } = useParts(activePlatform);
+    const activePlatform = useMemo(() => platformOverride || getPlatformFromURL() || null, [platformOverride]);
 
-    // Fetch specifically assigned relational models for this specific platform
-    const { models, isLoading: modelsLoading } = useBrandHardware(activePlatform || null);
-    const brandModels = useMemo(() => models.map(m => m.name), [models]);
+    // State
+    const [searchText, setSearchText] = useState("");
     const [selectedModel, setSelectedModel] = useState<string | null>(null);
+    const [urlModelSynced, setUrlModelSynced] = useState(false);
 
-    // Dynamic extraction of Fabrication Methods across all available parts for this page
+    const [checkedFabricationMethodBoxes, setCheckedFabricationMethodBoxes] = useState<{ [key: string]: boolean }>({});
+
+    // Hooks
+    const { parts, isLoading, error } = useParts(activePlatform || undefined);
+    const { models: brandModels, isLoading: modelsLoading } = useBrandHardware(activePlatform);
+    const { brands: allBrands } = useBoardHook();
+
+    const currentBrand = useMemo(() => {
+        if (!activePlatform) return null;
+        return allBrands.find(b => b.name.toLowerCase() === activePlatform.toLowerCase()) ||
+            allBrands.find(b => b.safe_slug === activePlatform.toLowerCase()) || null;
+    }, [allBrands, activePlatform]);
+
+    // Sync model from URL on mount
+    useEffect(() => {
+        if (!modelsLoading && brandModels.length > 0 && !urlModelSynced) {
+            const urlModelSlug = getModelFromURL();
+            if (urlModelSlug) {
+                const found = brandModels.find(m => m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') === urlModelSlug.toLowerCase());
+                if (found) setSelectedModel(found.name);
+            }
+            setUrlModelSynced(true);
+        }
+    }, [brandModels, modelsLoading, urlModelSynced]);
+
+    const handleModelSelect = (modelName: string | null) => {
+        setSelectedModel(modelName);
+        if (windowIsDefined() && activePlatform) {
+            const segments = window.location.pathname.split('/').filter(Boolean);
+            const isUniversal = segments[0] === 'brand';
+            const platformSlug = isUniversal ? `brand/${segments[1]}` : segments[0];
+
+            if (modelName) {
+                const modelSlug = modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+                navigate(`/${platformSlug}/models/${modelSlug}`, { replace: true });
+            } else {
+                navigate(`/${platformSlug}`, { replace: true });
+            }
+        }
+    };
+
+    // Filter Logic
     const uniqueFabricationMethods = useMemo(() => {
-        return [...new Set(parts.flatMap((p) => p.fabrication_method || []))].sort((a, b) => a.localeCompare(b));
+        const methods = new Set<string>();
+        parts.forEach(p => {
+            if (p.fabrication_method) {
+                p.fabrication_method.forEach(m => methods.add(m));
+            }
+        });
+        return Array.from(methods).sort();
     }, [parts]);
 
-    // Checkbox useState object lists
-    const [searchText, setSearchText] = useState("")
-    const [checkedFabricationMethodBoxes, setCheckedFabricationMethodBoxes] = useState<Record<string, boolean>>({})
-
-    const didMount = useRef(false)
-
-    // Sync init states when dynamic attributes fetch
-    useEffect(() => {
-        if (!isLoading && parts.length > 0) {
-            setCheckedFabricationMethodBoxes(Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false])));
-        }
-    }, [isLoading, parts.length])
-
-    const clearSearch = () => {
-        setSearchText("")
-        setCheckedFabricationMethodBoxes(Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false])))
-    }
-
-    //#region Query Parameter Pre-Filtering
-
-    if (!didMount.current && windowIsDefined()) {
-        const queryParams = new URLSearchParams(window.location.search)
-
-        const keyword = queryParams.get("keyword") ?? queryParams.get("search") ?? ""
-        if (keyword) {
-            setSearchText(decodeURIComponent(keyword))
-        }
-
-        const fabricationMethod = (queryParams.get("fab")?.split(",") ?? queryParams.get("fabrication")?.split(",") ?? []) as string[]
-        if (fabricationMethod && fabricationMethod.every((f) => uniqueFabricationMethods.includes(f))) {
-            const tempCheckedBoxes = Object.fromEntries(uniqueFabricationMethods.map((p) => [p, false]))
-            fabricationMethod.forEach((f) => tempCheckedBoxes[f] = true)
-            setCheckedFabricationMethodBoxes(tempCheckedBoxes)
-        }
-
-        didMount.current = true
-    }
-
-    //#endregion
-
-    const handleFabricationMethodCheckbox = (e: ChangeEvent<HTMLInputElement>) => {
-        setCheckedFabricationMethodBoxes({ ...checkedFabricationMethodBoxes, [e.target.name]: e.target.checked })
-    }
-
-    const showCopySearchButton = useMemo(() => {
-        return !!(
-            searchText
-            || Object.values(checkedFabricationMethodBoxes).some((v) => !!v)
-        );
-    }, [searchText, checkedFabricationMethodBoxes]);
+    const uniqueBoardModels = useMemo(() => {
+        const models = new Set<string>();
+        parts.forEach(p => {
+            if (p.board_model) models.add(p.board_model);
+        });
+        return Array.from(models).sort();
+    }, [parts]);
 
     const filteredParts = useMemo(() => {
-        return parts.filter(part => {
-            const partPlatforms = part.platform || [];
-            const partFabs = part.fabrication_method || [];
+        return parts.filter(p => {
+            const matchesSearch = p.title?.toLowerCase().includes(searchText.toLowerCase());
+            const matchesModel = !selectedModel || p.board_model === selectedModel;
 
-            const searchTerm = searchText.toLowerCase().trim();
-            const keywordMatch = !searchTerm || (
-                (part.title?.toLowerCase().includes(searchTerm)) ||
-                (partPlatforms.some(p => p?.toLowerCase().includes(searchTerm))) ||
-                (partFabs.some(t => t?.toLowerCase().includes(searchTerm)))
-            );
+            const activeMethods = Object.keys(checkedFabricationMethodBoxes).filter(k => checkedFabricationMethodBoxes[k]);
+            const matchesFabrication = activeMethods.length === 0 ||
+                (p.fabrication_method && p.fabrication_method.some(m => activeMethods.includes(m)));
 
-            const fabBoxesActive = Object.values(checkedFabricationMethodBoxes).some(v => !!v);
-            const fabMatch = !fabBoxesActive || partFabs.some(f => !!checkedFabricationMethodBoxes[f]);
-
-            const modelMatch = !selectedModel || part.board_model === selectedModel;
-
-            return keywordMatch && fabMatch && modelMatch;
+            return matchesSearch && matchesModel && matchesFabrication;
         });
-    }, [parts, searchText, checkedFabricationMethodBoxes, selectedModel]);
+    }, [parts, searchText, selectedModel, checkedFabricationMethodBoxes]);
+
+    const featuredModel = useMemo(() => {
+        if (!selectedModel) return null;
+        return brandModels.find(m => m.name === selectedModel) || null;
+    }, [selectedModel, brandModels]);
+
+    const showCopySearchButton = searchText.length > 0 || Object.values(checkedFabricationMethodBoxes).some(v => v);
+
+    const handleFabricationMethodCheckbox = (e: any) => {
+        const { name, checked } = e.target;
+        setCheckedFabricationMethodBoxes(prev => ({ ...prev, [name]: checked }));
+    };
+
+    const clearSearch = () => {
+        setSearchText("");
+        setCheckedFabricationMethodBoxes({});
+        setSelectedModel(null);
+    };
 
     return (
         <>
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                .brand-header-box {
+                    background: #0B0E14;
+                    border: 1px solid #1a1d20;
+                    border-radius: 2rem;
+                    overflow: hidden;
+                    box-shadow: 0 1rem 3rem rgba(0,0,0,0.5);
+                }
+                .featured-model-card {
+                    background: rgba(11, 14, 20, 0.5);
+                    border: 1px solid rgba(0, 229, 255, 0.2);
+                    border-radius: 1.5rem;
+                    backdrop-filter: blur(10px);
+                }
+                .accent-cyan { color: #00E5FF; }
+                .bg-accent-cyan-subtle { background: rgba(0, 229, 255, 0.1); }
+                .border-accent-cyan-subtle { border-color: rgba(0, 229, 255, 0.2); }
+                .text-tracking-widest { letter-spacing: 0.3em; }
+                .font-black { font-weight: 900; }
+                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+                .custom-scrollbar::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+                
+                /* High-Contrast Search Bar */
+                .search-input-custom {
+                    background: #111418 !important;
+                    border: 1px solid #24282d !important;
+                    color: white !important;
+                    font-weight: 600;
+                    padding: 1.25rem 1.5rem !important;
+                    border-radius: 1rem !important;
+                    transition: all 0.2s ease;
+                }
+                .search-input-custom:focus {
+                    background: #161a1f !important;
+                    border-color: #0dcaf0 !important;
+                    box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.1) !important;
+                    outline: none;
+                }
+                .search-input-custom::placeholder {
+                    color: rgba(255,255,255,0.7) !important;
+                    text-transform: uppercase;
+                    font-size: 0.75rem;
+                    letter-spacing: 0.1em;
+                }
+            `}} />
+
             {activePlatform && (
-                <div className="mb-4 pb-4 border-bottom border-secondary d-md-flex align-items-start gap-4">
-                    <div className="text-start flex-grow-1">
-                        <h2 className="display-4 fw-bold mb-4 text-white text-uppercase" style={{ letterSpacing: '0.1rem' }}>
-                            {activePlatform} <span style={{ color: '#0dcaf0' }}>PARTS</span>
-                        </h2>
+                <div className="brand-header-box mb-5 overflow-hidden">
+                    <Row className="g-0">
+                        {/* Left Column: Title & Filters */}
+                        <Col lg={5} className="p-4 p-md-5 border-bottom border-lg-bottom-0 border-lg-end border-secondary d-flex flex-column justify-content-center position-relative">
+                            <div className="position-relative z-index-1">
+                                <div className="d-flex align-items-center gap-3 mb-3">
+                                    <div className="bg-info" style={{ height: '2px', width: '40px' }}></div>
+                                    <span className="text-info text-uppercase fw-bold small text-tracking-widest">Hardware Repository</span>
+                                </div>
+                                <h1 className="display-4 fw-black text-white text-uppercase mb-4" style={{ letterSpacing: '-0.02em' }}>
+                                    {activePlatform}
+                                </h1>
 
-                        <h5 className="text-uppercase text-secondary fw-bold mb-3">BOARD MODELS</h5>
+                                <h6 className="text-secondary text-uppercase fw-bold small text-tracking-widest mb-3 italic">Select Board Model</h6>
+                                <div className="d-flex flex-wrap gap-2">
+                                    <Button
+                                        variant={selectedModel === null ? "info" : "outline-light"}
+                                        size="sm"
+                                        className={`px-4 py-2 rounded-3 text-uppercase fw-bold small ${selectedModel === null ? 'bg-accent-cyan-subtle text-info border-accent-cyan-subtle' : 'text-light border-secondary opacity-75'}`}
+                                        onClick={() => handleModelSelect(null)}
+                                    >
+                                        All Models
+                                    </Button>
+                                    {brandModels.map(m => (
+                                        <Button
+                                            key={`model-${m.id}`}
+                                            variant={selectedModel === m.name ? "info" : "outline-light"}
+                                            size="sm"
+                                            className={`px-4 py-2 rounded-3 text-uppercase fw-bold small ${selectedModel === m.name ? 'bg-accent-cyan-subtle text-info border-accent-cyan-subtle' : 'text-light border-secondary opacity-75'}`}
+                                            onClick={() => handleModelSelect(m.name)}
+                                        >
+                                            {m.name}
+                                        </Button>
+                                    ))}
 
-                        {modelsLoading ? (
-                            <div className="placeholder-glow w-100" style={{ minHeight: "40px" }}>
-                                <div className="mb-3 d-flex gap-2">
-                                    <span className="placeholder col-2 rounded-pill py-3"></span>
-                                    <span className="placeholder col-3 rounded-pill py-3"></span>
-                                    <span className="placeholder col-2 rounded-pill py-3"></span>
                                 </div>
                             </div>
-                        ) : brandModels && brandModels.length > 0 ? (
-                            <div className="d-flex flex-wrap gap-2 pe-md-4">
-                                <Button
-                                    variant={selectedModel === null ? "info" : "outline-info"}
-                                    className="fw-bold rounded-pill px-4 btn-sm text-uppercase border-secondary shadow-sm"
-                                    onClick={() => setSelectedModel(null)}
-                                >
-                                    All Models
-                                </Button>
-                                {brandModels.map(m => (
-                                    <Button
-                                        key={`model-${m}`}
-                                        variant={selectedModel === m ? "info" : "outline-secondary"}
-                                        className="fw-bold rounded-pill px-4 btn-sm text-uppercase shadow-sm pe-auto"
-                                        onClick={() => setSelectedModel(m)}
-                                    >
-                                        {m}
-                                    </Button>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="text-muted small fst-italic">No specific hardware models currently registered for this brand.</div>
-                        )}
-                    </div>
+                        </Col>
 
-                    {/* Empty placeholder div to enforce layout alignment equivalent to old Col md=3 */}
-                    <div className="d-none d-md-block" style={{ width: '25%' }}></div>
+                        {/* Right Column: Featured Box */}
+                        <Col lg={7} className="p-4 p-md-5 bg-dark bg-opacity-25">
+                            <Card className="featured-model-card h-100 border-0 p-4">
+                                {featuredModel ? (
+                                    <Row className="h-100 align-items-center g-4">
+                                        <Col md={4} className="mb-4 mb-md-0">
+                                            <div className="bg-black rounded-4 border border-secondary p-3 d-flex align-items-center justify-content-center shadow-sm" style={{ aspectRatio: '1/1' }}>
+                                                {featuredModel.image_url ? (
+                                                    <img src={featuredModel.image_url} alt={featuredModel.name} className="img-fluid" style={{ maxHeight: '100%', objectFit: 'contain' }} />
+                                                ) : (
+                                                    <div className="display-4 text-secondary opacity-10 italic fw-black text-center">X</div>
+                                                )}
+                                            </div>
+                                        </Col>
+                                        <Col md={8}>
+                                            <h3 className="text-white fw-black text-uppercase italic mb-4" style={{ fontSize: '1.75rem', letterSpacing: '-0.02em' }}>{featuredModel.name}</h3>
+                                            <div>
+                                                <div className="text-secondary text-uppercase fw-bold small text-tracking-widest mb-2" style={{ fontSize: '10px', opacity: 0.8 }}>Tech Readout</div>
+                                                <p className="text-light font-monospace mb-0" style={{ lineHeight: '1.6', fontSize: '14px', whiteSpace: 'pre-wrap', opacity: 0.85 }}>
+                                                    {featuredModel.description?.trim() || "AWAITING ADMINISTRATIVE HARDWARE ENTRY."}
+                                                </p>
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                ) : (
+                                    <Row className="h-100 align-items-center g-4">
+                                        <Col md={4} className="mb-4 mb-md-0">
+                                            <div className="bg-black rounded-4 border border-secondary p-3 d-flex align-items-center justify-content-center shadow-sm" style={{ aspectRatio: '1/1' }}>
+                                                {currentBrand?.image_url && !currentBrand.image_url.includes('placeholder.png') ? (
+                                                    <img src={currentBrand.image_url} alt={currentBrand.name} className="img-fluid" style={{ maxHeight: '100%', objectFit: 'contain' }} />
+                                                ) : (
+                                                    <div className="display-1 text-secondary opacity-10 italic fw-black text-center">i</div>
+                                                )}
+                                            </div>
+                                        </Col>
+                                        <Col md={8}>
+                                            <h2 className="text-white fw-black text-uppercase italic mb-1" style={{ fontSize: '2rem', letterSpacing: '-0.03em' }}>{activePlatform}</h2>
+                                            <div className="text-info text-uppercase fw-bold small text-tracking-widest mb-4" style={{ fontSize: '10px' }}>Hardware Repository</div>
+                                            <p className="text-light font-monospace mb-0" style={{ lineHeight: '1.6', fontSize: '14px', whiteSpace: 'pre-wrap', opacity: 0.85 }}>
+                                                {currentBrand?.description || "AWAITING ADMINISTRATIVE DOCUMENTATION SYNC FOR THIS HARDWARE PLATFORM."}
+                                            </p>
+                                        </Col>
+                                    </Row>
+                                )}
+                            </Card>
+                        </Col>
+                    </Row>
+                </div>
+            )}
+
+            {!activePlatform && uniqueBoardModels.length > 0 && (
+                <div className="mb-5 p-4 bg-dark bg-opacity-25 border border-secondary rounded-4 shadow-sm">
+                    <div className="d-flex align-items-center gap-3 mb-3">
+                        <div className="bg-info" style={{ height: '2px', width: '30px' }}></div>
+                        <span className="text-secondary text-uppercase fw-bold small text-tracking-widest" style={{ fontSize: '11px' }}>Filter by Hardware Model</span>
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                        <Button
+                            variant={selectedModel === null ? "info" : "outline-light"}
+                            size="sm"
+                            className={`px-3 py-1 rounded-3 text-uppercase fw-bold small ${selectedModel === null ? 'bg-accent-cyan-subtle text-info border-accent-cyan-subtle' : 'text-light border-secondary opacity-50'}`}
+                            onClick={() => setSelectedModel(null)}
+                        >
+                            All Models
+                        </Button>
+                        {uniqueBoardModels.map(modelName => (
+                            <Button
+                                key={`filter-model-${modelName}`}
+                                variant={selectedModel === modelName ? "info" : "outline-light"}
+                                size="sm"
+                                className={`px-3 py-1 rounded-3 text-uppercase fw-bold small ${selectedModel === modelName ? 'bg-accent-cyan-subtle text-info border-accent-cyan-subtle' : 'text-light border-secondary opacity-50'}`}
+                                onClick={() => setSelectedModel(modelName)}
+                            >
+                                {modelName}
+                            </Button>
+                        ))}
+                    </div>
                 </div>
             )}
 
             <div className="searchArea mb-5">
                 <Stack direction="vertical" gap={3}>
-                    {/* Pretty Rounded Search Bar */}
-                    <div className="searchKeyword w-100">
+                    <div className="searchKeyword position-relative">
                         <Form.Control
-                            as="input"
                             type="search"
-                            id="inputSearch"
                             value={searchText}
-                            placeholder="Search text to filter by..."
+                            placeholder="Filter parts catalog..."
                             onChange={(e) => setSearchText(e.target.value)}
-                            className="w-100 rounded-pill p-3 border-0 shadow-sm fw-bold bg-white text-dark"
-                            style={{ maxWidth: '100%', outline: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                            className="search-input-custom shadow-lg"
                         />
+                        {searchText && (
+                            <button
+                                onClick={() => setSearchText("")}
+                                className="position-absolute end-0 top-50 translate-middle-y me-3 btn btn-link text-secondary p-0"
+                            >
+                                <FaArrowRotateLeft size={14} />
+                            </button>
+                        )}
                     </div>
 
-                    {uniqueFabricationMethods.length > 0 &&
-                        <div className="searchFabricationCheckBoxes d-flex flex-column gap-2 mt-2">
-                            <Form.Label className="mb-0 fw-bold fs-6 text-light">
-                                Fabrication Method(s):
-                            </Form.Label>
+                    <div className="d-flex flex-column flex-md-row gap-4 justify-content-between align-items-md-center">
+                        {uniqueFabricationMethods.length > 0 &&
+                            <div className="d-flex flex-column gap-2">
+                                <label className="text-secondary text-uppercase fw-bold small text-tracking-widest">Fabrication Methods</label>
+                                <div className="d-flex flex-wrap gap-2">
+                                    {uniqueFabricationMethods.map((f, index) => (
+                                        <Button
+                                            key={`fab-${index}`}
+                                            variant={checkedFabricationMethodBoxes[f] ? "info" : "outline-light"}
+                                            size="sm"
+                                            className={`px-3 py-1 text-uppercase fw-black small border-secondary ${checkedFabricationMethodBoxes[f] ? 'text-white shadow-sm' : 'text-light opacity-50'}`}
+                                            style={{ fontSize: '10px', letterSpacing: '0.05em' }}
+                                            onClick={() => setCheckedFabricationMethodBoxes(prev => ({ ...prev, [f]: !prev[f] }))}
+                                        >
+                                            {f}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+                        }
 
-                            <ButtonGroup size="sm" className="d-flex flex-wrap gap-2" style={{ maxWidth: "max-content" }}>
-                                {uniqueFabricationMethods.map((f, index) => (
-                                    <ToggleButton
-                                        key={`fabricationMethod-${index}`}
-                                        checked={checkedFabricationMethodBoxes[f] || false}
-                                        onChange={handleFabricationMethodCheckbox}
-                                        name={f}
-                                        id={f}
-                                        type="checkbox"
-                                        value={1}
-                                        variant="outline-info"
-                                        className="rounded px-3 py-1"
-                                        style={{ borderTopLeftRadius: "6px", borderBottomLeftRadius: "6px", borderTopRightRadius: "6px", borderBottomRightRadius: "6px" }}
-                                    >
-                                        {f}
-                                    </ToggleButton>
-                                ))}
-                            </ButtonGroup>
+                        <div className="d-flex gap-2">
+                            {showCopySearchButton && (
+                                <Button
+                                    variant="outline-danger"
+                                    size="sm"
+                                    className="text-uppercase fw-bold small px-4 py-2"
+                                    onClick={clearSearch}
+                                >
+                                    Reset
+                                </Button>
+                            )}
+                            <CopyLinkButton
+                                text="Copy Link"
+                                link={!windowIsDefined() ? "#" : `${window.location.origin}${window.location.pathname}?search=${encodeURIComponent(searchText)}&fab=${uniqueFabricationMethods.filter(f => checkedFabricationMethodBoxes[f]).join(',')}`}
+                                style={{ display: showCopySearchButton ? "block" : "none" }}
+                            />
                         </div>
-                    }
-
-                    <Stack direction="horizontal" gap={2} className="mt-3">
-                        <Button
-                            type="button"
-                            size="sm"
-                            variant="outline-info"
-                            style={{ display: showCopySearchButton ? "initial" : "none", maxWidth: "max-content" }}
-                            onClick={() => clearSearch()}>
-                            Clear Search <FaArrowRotateLeft />
-                        </Button>
-
-                        <CopyLinkButton
-                            text="Copy This Search"
-                            link={!windowIsDefined() ? "#" : "http://" + window.location.host + window.location.pathname + `?search=${encodeURIComponent(searchText)}` + `&fab=${uniqueFabricationMethods.filter((f) => !!checkedFabricationMethodBoxes[f])}`}
-                            style={{ display: showCopySearchButton ? "initial" : "none", maxWidth: "max-content" }} />
-                    </Stack>
+                    </div>
                 </Stack>
             </div>
 
-            {/* Defensive Coding Data Display: Skeleton Loading Grid, Error, Gallery Map */}
             {isLoading && <SkeletonGrid />}
 
             {error && (
-                <Alert variant="danger" className="my-4">
-                    <strong>Error loading parts:</strong> {error}
-                    {error.includes("Failed to fetch") && (
-                        <div className="mt-2 text-muted small">
-                            <em>Diagnostics: This network error typically means the database URL is missing or improperly formatted. Check browser environment variables.</em>
+                <Alert variant="danger" className="my-5 shadow-sm border-danger bg-dark text-danger p-4">
+                    <div className="d-flex align-items-center gap-3">
+                        <div className="rounded-circle bg-danger bg-opacity-25 d-flex align-items-center justify-content-center fw-bold" style={{ width: '40px', height: '40px' }}>!</div>
+                        <div>
+                            <h6 className="fw-bold text-uppercase mb-1" style={{ letterSpacing: '0.1em' }}>Sync Failure</h6>
+                            <p className="small mb-0 opacity-75">{error}</p>
                         </div>
-                    )}
+                    </div>
                 </Alert>
             )}
 
             {!isLoading && !error && (
-                <>
-                    <h2 id="itemListHeader" className="mb-4" style={{ display: filteredParts.length > 0 ? "block" : "none" }}>Items From Cloud DB</h2>
-                    <h2 id="noResultsText" style={{ display: filteredParts.length === 0 && parts.length > 0 ? "block" : "none", minHeight: "200px" }}>No results.</h2>
+                <div className="mt-5">
+                    <div className="d-flex align-items-center justify-content-between mb-4 border-bottom border-secondary pb-3">
+                        <h2 className="h6 fw-bold text-uppercase text-white mb-0" style={{ letterSpacing: '0.3em' }}>
+                            Assets
+                        </h2>
+                        <Badge bg="dark" className="border border-secondary px-3 py-1 text-secondary small">
+                            {filteredParts.length} Records
+                        </Badge>
+                    </div>
 
-                    {/* Show a clear fallback message if filtering leaves zero rows */}
                     {parts.length === 0 ? (
-                        <Alert variant="info" className="my-5 py-4 text-center border-0 shadow-sm" style={{ backgroundColor: "#1a1d20", minHeight: "150px" }}>
-                            <h4 className="fw-bold mb-2 text-info">No parts found</h4>
-                            <p className="mb-0 text-light opacity-75">There are currently no parts available for {activePlatform ? `the ${activePlatform} platform` : 'this search'} in the database.</p>
-                        </Alert>
+                        <div className="py-5 text-center bg-dark bg-opacity-25 rounded-4 border border-secondary border-dashed">
+                            <div className="display-6 mb-3 text-secondary opacity-25 italic">Empty</div>
+                            <h5 className="fw-bold text-info text-uppercase mb-2" style={{ letterSpacing: '0.1em' }}>No Parts Registered</h5>
+                            <p className="small text-muted text-uppercase mb-0">Check back later or contribute hardware files to this platform.</p>
+                        </div>
+                    ) : filteredParts.length === 0 ? (
+                        <div className="py-5 text-center">
+                            <h5 className="fw-bold text-secondary text-uppercase mb-2" style={{ letterSpacing: '0.1em' }}>Refine Search</h5>
+                            <p className="small text-muted text-uppercase mb-0">No assets match your current filtering criteria.</p>
+                        </div>
                     ) : (
-                        <Row>
+                        <Row className="g-4">
                             {filteredParts.map((part, index) => (
                                 <PartCard key={`part-card-${part.id}-${index}`} part={mapPartToSchema(part)} index={index} />
                             ))}
                         </Row>
                     )}
-                </>
+                </div>
             )}
         </>
     )
 }
+

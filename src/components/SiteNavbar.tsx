@@ -15,33 +15,33 @@ import { useEffect } from "react"
 type NavPlatformDef = { label: string; href: string; divider?: never } | { divider: true; label?: never; href?: never };
 
 const DEFAULT_PLATFORMS: NavPlatformDef[] = [
-    { label: "Street (DIY/Generic)", href: "/parts/street" },
-    { label: "Off-Road (DIY/Generic)", href: "/parts/offroad" },
-    { label: "Misc", href: "/parts/misc" },
+    { label: "Street (DIY/Generic)", href: "/street" },
+    { label: "Off-Road (DIY/Generic)", href: "/offroad" },
+    { label: "Misc", href: "/misc" },
     { divider: true },
-    { label: "3D Servisas", href: "/parts/3dservisas" },
-    { label: "Acedeck", href: "/parts/acedeck" },
-    { label: "Apex Boards", href: "/parts/apex" },
-    { label: "Backfire", href: "/parts/backfire" },
-    { label: "Bioboards", href: "/parts/bioboards" },
-    { label: "Boardnamics", href: "/parts/boardnamics" },
-    { label: "Defiant Board Society", href: "/parts/defiant" },
-    { label: "Evolve", href: "/parts/evolve" },
-    { label: "Exway", href: "/parts/exway" },
-    { label: "Fluxmotion", href: "/parts/fluxmotion" },
-    { label: "Hoyt St", href: "/parts/hoyt" },
-    { label: "Lacroix Boards", href: "/parts/lacroix" },
-    { label: "Linnpower", href: "/parts/linnpower" },
-    { label: "MBoards", href: "/parts/mboards" },
-    { label: "MBS", href: "/parts/mbs" },
-    { label: "Meepo", href: "/parts/meepo" },
-    { label: "Newbee", href: "/parts/newbee" },
-    { label: "Propel", href: "/parts/propel" },
-    { label: "Radium Performance", href: "/parts/radium" },
-    { label: "Stooge Raceboards", href: "/parts/stooge" },
-    { label: "Summerboard", href: "/parts/summerboard" },
-    { label: "Trampa Boards", href: "/parts/trampa" },
-    { label: "Wowgo", href: "/parts/wowgo" }
+    { label: "3D Servisas", href: "/3dservisas" },
+    { label: "Acedeck", href: "/acedeck" },
+    { label: "Apex Boards", href: "/apex" },
+    { label: "Backfire", href: "/backfire" },
+    { label: "Bioboards", href: "/bioboards" },
+    { label: "Boardnamics", href: "/boardnamics" },
+    { label: "Defiant Board Society", href: "/defiant" },
+    { label: "Evolve", href: "/evolve" },
+    { label: "Exway", href: "/exway" },
+    { label: "Fluxmotion", href: "/fluxmotion" },
+    { label: "Hoyt St", href: "/hoyt" },
+    { label: "Lacroix Boards", href: "/lacroix" },
+    { label: "Linnpower", href: "/linnpower" },
+    { label: "MBoards", href: "/mboards" },
+    { label: "MBS", href: "/mbs" },
+    { label: "Meepo", href: "/meepo" },
+    { label: "Newbee", href: "/newbee" },
+    { label: "Propel", href: "/propel" },
+    { label: "Radium Performance", href: "/radium" },
+    { label: "Stooge Raceboards", href: "/stooge" },
+    { label: "Summerboard", href: "/summerboard" },
+    { label: "Trampa Boards", href: "/trampa" },
+    { label: "Wowgo", href: "/wowgo" }
 ];
 
 type NavbarProps = {
@@ -95,7 +95,7 @@ export default ({ isHomepage }: NavbarProps) => {
                         const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
                         dynamicPlatforms.push({
                             label: p.name,
-                            href: existingStatic ? existingStatic.href : `/parts/?brand=${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+                            href: existingStatic ? existingStatic.href : `/brand/${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
                         } as NavPlatformDef);
                     });
                     setNavPlatforms(dynamicPlatforms);
@@ -136,98 +136,79 @@ export default ({ isHomepage }: NavbarProps) => {
     };
 
     return (
-        <Navbar fixed="top" expand="lg" data-bs-theme="dark">
+        <Navbar fixed="top" expand="lg" data-bs-theme="dark" className="border-bottom border-zinc-800 backdrop-blur-md bg-black/80">
             <Container>
                 <style dangerouslySetInnerHTML={{
                     __html: `
+                    .navbar-brand img {
+                        transition: all 0.3s ease;
+                    }
+                    .navbar-brand:hover img {
+                        transform: scale(1.05);
+                    }
+                    .nav-link {
+                        font-weight: 500;
+                        letter-spacing: 0.02em;
+                        transition: color 0.2s ease;
+                    }
+                    .dropdown-menu {
+                        background-color: #090a0b !important;
+                        border: 1px solid #24282d !important;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                    }
                     @media (max-width: 991px) {
                         .navbar-collapse {
                             max-height: 80vh;
                             overflow-y: auto;
+                            padding: 1rem 0;
                         }
                     }
-                    .dropdown-menu.show {
-                        max-height: 65vh !important;
-                        overflow-y: auto !important;
-                        overflow-x: hidden !important;
-                        border: 1px solid #24282d !important;
-                        background-color: #090a0b !important;
-                        scrollbar-width: thin;
-                        scrollbar-color: #0dcaf0 #121417;
-                    }
-                    /* Reset for hidden state to allow Bootstrap/custom transitions to work */
-                    .dropdown-menu:not(.show) {
-                        max-height: 0 !important;
-                        border: 0 !important;
-                        padding: 0 !important;
-                        margin: 0 !important;
-                        display: block !important; 
-                        overflow: hidden !important;
-                    }
-                    .dropdown-item {
-                        padding: 0.75rem 1.5rem !important;
-                        font-size: 1rem !important;
-                        transition: all 0.2s ease;
-                        color: #adb5bd; /* Ensure text is visible */
-                    }
-                    .dropdown-item:hover {
-                        background-color: #121417 !important;
-                        color: #0dcaf0 !important;
-                        padding-left: 1.75rem !important;
-                    }
-                    .dropdown-menu::-webkit-scrollbar {
-                        width: 8px;
-                    }
-                    .dropdown-menu::-webkit-scrollbar-track {
-                        background: #090a0b;
-                    }
-                    .dropdown-menu::-webkit-scrollbar-thumb {
-                        background-color: #24282d;
-                        border-radius: 10px;
-                        border: 2px solid #090a0b;
-                    }
-                    .dropdown-menu::-webkit-scrollbar-thumb:hover {
-                        background-color: #0dcaf0;
-                    }
                 `}} />
-                <Navbar.Brand href="/" onClick={handleLogoClick}>
+
+                <Navbar.Brand href="/" onClick={handleLogoClick} className="d-flex align-items-center gap-2">
                     <StaticImage
                         src="../../static/images/logo.png"
-                        width={55}
-                        height={55}
-                        className={(isHomepage ? "d-inline-block" : "d-xs-inline-block d-md-none") + " align-top" + (isSpinning ? " spin-once" : "")}
+                        width={45}
+                        height={45}
+                        className={(isSpinning ? " spin-once" : "")}
                         alt="ESK8CAD.COM logo" />
 
-                    <span className={(isHomepage ? "d-none" : "d-none d-md-inline-block")}>
+                    <span className="fw-black tracking-tighter fs-4 uppercase">
                         ESK8CAD.COM
                     </span>
                 </Navbar.Brand>
 
-                <Nav.Link as={Link} to="/fosterqc" className="ms-2 opacity-75 hover-opacity-100 me-auto" style={{ fontSize: '0.9rem' }}>
-                    Fosterqc
-                </Nav.Link>
+                <div className="d-flex align-items-center gap-3 order-lg-3">
+                    <Nav.Link as={Link} to="/fosterqc" className="d-none d-md-block opacity-50 hover-opacity-100" style={{ fontSize: '0.8rem' }}>
+                        BY FOSTERQC
+                    </Nav.Link>
 
-                <Stack direction="horizontal" gap={3}>
-                    {/* Mobile Search Button */}
-                    <Nav.Link className="d-md-block d-lg-none navbar-toggler" onClick={() => setShowModal(true)} aria-label="Sitewide search modal trigger"><FaMagnifyingGlass style={{ height: "1rem", width: "1rem" }} /></Nav.Link>
-                    {/* Mobile Navigation Toggle */}
-                    <Navbar.Toggle label="Menu toggle" aria-controls="site-navbar"><FaBars style={{ height: "1rem", width: "1rem" }} /></Navbar.Toggle>
-                </Stack>
+                    {/* Desktop Search Button */}
+                    <Button
+                        variant="link"
+                        className="p-2 text-white opacity-75 hover-opacity-100 d-none d-lg-block"
+                        onClick={() => setShowModal(true)}
+                        aria-label="Sitewide search modal trigger"
+                    >
+                        <FaMagnifyingGlass />
+                    </Button>
 
-                {/* Navbar */}
-                <Navbar.Collapse id="site-navbar">
-                    <Nav variant="underline" justify>
+                    <Stack direction="horizontal" gap={2} className="d-lg-none">
+                        <Button variant="link" className="p-2 text-white" onClick={() => setShowModal(true)} aria-label="Mobile search"><FaMagnifyingGlass /></Button>
+                        <Navbar.Toggle aria-controls="site-navbar" className="border-0 p-2">
+                            <FaBars />
+                        </Navbar.Toggle>
+                    </Stack>
+                </div>
+
+                <Navbar.Collapse id="site-navbar" className="order-lg-2">
+                    <Nav className="ms-auto me-lg-4 gap-lg-2">
                         <Nav.Link href="/">Home</Nav.Link>
                         <Nav.Link as={Link} to="/submit">Submit</Nav.Link>
-                        <Nav.Link as={Link} to="/oem" style={{ color: '#a855f7', fontWeight: 'bold' }}>OEM</Nav.Link>
+                        <Nav.Link as={Link} to="/oem" style={{ color: '#00E5FF', fontWeight: '900' }}>OEM</Nav.Link>
                         <NavDropdown title="Board Platforms" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-parts-dropdown">
                             {navPlatforms.map((p, index) => {
                                 if (p.divider) return <NavDropdown.Divider key={`nav-divider-${index}`} />;
-                                const isDynamic = p.href?.startsWith('/parts/?');
-
-                                if (isDynamic) {
-                                    return <NavDropdown.Item key={p.label} href={p.href}>{p.label}</NavDropdown.Item>;
-                                }
                                 return (
                                     <NavDropdown.Item key={p.label} as={Link} to={p.href!}>
                                         {p.label}
@@ -248,10 +229,9 @@ export default ({ isHomepage }: NavbarProps) => {
                             <NavDropdown.Item href={DiscordInvite} target="_blank">1. Join Vescify Discord</NavDropdown.Item>
                             <NavDropdown.Item href={DiscordThread} target="_blank">2. Post in Thread</NavDropdown.Item>
                         </NavDropdown>
-                        {/* Desktop Search Button */}
-                        <Nav.Link className="d-none d-lg-block" onClick={() => setShowModal(true)} aria-label="Sitewide search modal trigger"><FaMagnifyingGlass /></Nav.Link>
                     </Nav>
                 </Navbar.Collapse>
+
 
                 {/* Search Modal */}
                 <Modal

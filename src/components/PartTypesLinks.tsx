@@ -8,32 +8,32 @@ import { getSupabaseClient } from "../lib/supabase"
  */
 const PartTypesLinks: React.FC = () => {
     const DEFAULT_PLATFORMS = [
-        { label: "Street (DIY/Generic)", href: "/parts/street" },
-        { label: "Off-Road (DIY/Generic)", href: "/parts/offroad" },
-        { label: "Misc", href: "/parts/misc" },
-        { label: "3D Servisas", href: "/parts/3dservisas" },
-        { label: "Acedeck", href: "/parts/acedeck" },
-        { label: "Apex Boards", href: "/parts/apex" },
-        { label: "Backfire", href: "/parts/backfire" },
-        { label: "Bioboards", href: "/parts/bioboards" },
-        { label: "Boardnamics", href: "/parts/boardnamics" },
-        { label: "Defiant Board Society", href: "/parts/defiant" },
-        { label: "Evolve", href: "/parts/evolve" },
-        { label: "Exway", href: "/parts/exway" },
-        { label: "Fluxmotion", href: "/parts/fluxmotion" },
-        { label: "Hoyt St", href: "/parts/hoyt" },
-        { label: "Lacroix Boards", href: "/parts/lacroix" },
-        { label: "Linnpower", href: "/parts/linnpower" },
-        { label: "MBoards", href: "/parts/mboards" },
-        { label: "MBS", href: "/parts/mbs" },
-        { label: "Meepo", href: "/parts/meepo" },
-        { label: "Newbee", href: "/parts/newbee" },
-        { label: "Propel", href: "/parts/propel" },
-        { label: "Radium Performance", href: "/parts/radium" },
-        { label: "Stooge Raceboards", href: "/parts/stooge" },
-        { label: "Summerboard", href: "/parts/summerboard" },
-        { label: "Trampa Boards", href: "/parts/trampa" },
-        { label: "Wowgo", href: "/parts/wowgo" }
+        { label: "Street (DIY/Generic)", href: "/street" },
+        { label: "Off-Road (DIY/Generic)", href: "/offroad" },
+        { label: "Misc", href: "/misc" },
+        { label: "3D Servisas", href: "/3dservisas" },
+        { label: "Acedeck", href: "/acedeck" },
+        { label: "Apex Boards", href: "/apex" },
+        { label: "Backfire", href: "/backfire" },
+        { label: "Bioboards", href: "/bioboards" },
+        { label: "Boardnamics", href: "/boardnamics" },
+        { label: "Defiant Board Society", href: "/defiant" },
+        { label: "Evolve", href: "/evolve" },
+        { label: "Exway", href: "/exway" },
+        { label: "Fluxmotion", href: "/fluxmotion" },
+        { label: "Hoyt St", href: "/hoyt" },
+        { label: "Lacroix Boards", href: "/lacroix" },
+        { label: "Linnpower", href: "/linnpower" },
+        { label: "MBoards", href: "/mboards" },
+        { label: "MBS", href: "/mbs" },
+        { label: "Meepo", href: "/meepo" },
+        { label: "Newbee", href: "/newbee" },
+        { label: "Propel", href: "/propel" },
+        { label: "Radium Performance", href: "/radium" },
+        { label: "Stooge Raceboards", href: "/stooge" },
+        { label: "Summerboard", href: "/summerboard" },
+        { label: "Trampa Boards", href: "/trampa" },
+        { label: "Wowgo", href: "/wowgo" }
     ];
 
     const [platforms, setPlatforms] = useState<{ label: string, href: string }[]>(DEFAULT_PLATFORMS)
@@ -44,13 +44,13 @@ const PartTypesLinks: React.FC = () => {
             try {
                 const client = getSupabaseClient();
                 if (!client) return;
-                const { data } = await client.from('board_platforms').select('name').order('name');
+                const { data } = await client.from('brands').select('name').order('name');
                 if (data && data.length > 0 && isMounted) {
                     const dynamicPlatforms = data.map(p => {
                         const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
                         return {
                             label: p.name,
-                            href: existingStatic ? existingStatic.href : `/parts/?brand=${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+                            href: existingStatic ? existingStatic.href : `/${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
                         };
                     });
                     setPlatforms(dynamicPlatforms);

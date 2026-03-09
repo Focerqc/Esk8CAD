@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Button, Form, Spinner, InputGroup } from 'react-bootstrap';
+import { Button, Form, Spinner, InputGroup, Badge } from 'react-bootstrap';
 import { useBrandHardware } from '../../hooks/useBrandHardware';
 import { Model } from '../../lib/supabase';
 
@@ -82,36 +82,50 @@ export default function HardwareFields({
     };
 
     return (
-        <div className="mt-4 p-4 bg-dark border border-secondary rounded shadow-sm">
+        <div className="mt-4">
             {!isOpen ? (
                 <Button
-                    variant="outline-info"
-                    className="w-100 fw-bold py-3"
+                    variant="outline-secondary"
+                    className="w-100 p-3 text-uppercase fw-bold small opacity-75 border-secondary"
                     onClick={() => setIsOpen(true)}
                 >
-                    Does this part fit a specific board model?
+                    Link to specific hardware model?
                 </Button>
             ) : (
-                <div className="hardware-drilldown">
-                    <div className="d-flex justify-content-between align-items-center mb-3 border-bottom border-secondary pb-2">
-                        <h5 className="text-info fw-bold mb-0">Hardware Fitment Context</h5>
-                        <Button variant="outline-secondary" size="sm" onClick={() => setIsOpen(false)}>Cancel / Clear</Button>
+                <div className="bg-black bg-opacity-25 rounded border border-secondary p-4 shadow-sm animate-in fade-in">
+                    <div className="d-flex justify-content-between align-items-center mb-4 border-bottom border-secondary pb-3">
+                        <div className="d-flex align-items-center gap-2">
+                            <div className="bg-info" style={{ width: '3px', height: '15px' }}></div>
+                            <h6 className="small fw-bold text-uppercase text-light mb-0" style={{ letterSpacing: '0.1em' }}>Fitment Matrix</h6>
+                        </div>
+                        <Button
+                            variant="link"
+                            className="p-0 text-uppercase fw-bold text-danger small text-decoration-none opacity-50 hover-opacity-100"
+                            onClick={() => setIsOpen(false)}
+                        >
+                            Deactivate Segment
+                        </Button>
                     </div>
 
-                    <div className="d-flex flex-column gap-4">
+                    <div>
                         {/* MODEL SELECTION */}
-                        <div>
-                            <h6 className="small uppercase text-light opacity-75 fw-bold mb-2">Exact Board Model</h6>
-                            {isLoading ? <Spinner size="sm" animation="border" variant="info" /> : (
-                                <div className="d-flex flex-wrap gap-2 p-3 bg-black rounded border border-secondary shadow-inner">
-
+                        <div className="mb-3">
+                            <h6 className="small fw-bold text-uppercase text-light opacity-50 mb-3" style={{ letterSpacing: '0.1em' }}>Hardware Segments</h6>
+                            {isLoading ? (
+                                <div className="d-flex gap-2 align-items-center">
+                                    <Spinner animation="border" size="sm" variant="info" />
+                                    <span className="small text-light opacity-50 text-uppercase">Detecting Hardware...</span>
+                                </div>
+                            ) : (
+                                <div className="d-flex flex-wrap gap-2">
                                     {!isAddingNewModel && models.map(m => {
                                         const isSelected = modelId === m.id;
                                         return (
                                             <Button
                                                 key={m.id}
+                                                variant={isSelected ? "info" : "outline-light"}
                                                 size="sm"
-                                                variant={isSelected ? "primary" : "outline-light"}
+                                                className={`px-3 py-2 text-uppercase fw-bold small ${isSelected ? 'text-black' : 'text-light opacity-75 border-secondary'}`}
                                                 onClick={() => handleModelSelect(m)}
                                             >
                                                 {m.name}
@@ -119,57 +133,51 @@ export default function HardwareFields({
                                         );
                                     })}
 
-                                    {/* Show the custom model button if it's currently selected but not in the DB list */}
                                     {!isAddingNewModel && modelId && !models.some(m => m.id === modelId) && (
-                                        <Button
-                                            size="sm"
-                                            variant="warning"
-                                            onClick={() => onChangeModel(null)}
-                                        >
-                                            <span className="me-1">🚩</span>
-                                            {modelId}
-                                        </Button>
+                                        <Badge bg="warning" text="dark" className="d-flex align-items-center gap-2 px-3 py-2 text-uppercase fw-bold small cursor-pointer" onClick={() => onChangeModel(null)}>
+                                            🚩 {modelId}
+                                        </Badge>
                                     )}
 
                                     {!isAddingNewModel && (
                                         <Button
+                                            variant="outline-light"
                                             size="sm"
-                                            variant="warning"
-                                            className={`fw-bold ${models.length > 0 ? "ms-auto" : ""}`}
+                                            className="px-3 py-2 text-uppercase fw-bold small ms-auto border-secondary opacity-75 text-light"
                                             onClick={() => {
                                                 setIsAddingNewModel(true);
                                                 setTempCustomModel("");
                                             }}
                                         >
-                                            Other / Add New
+                                            Override / New
                                         </Button>
                                     )}
 
                                     {isAddingNewModel && (
-                                        <div className="w-100 position-relative">
-                                            <InputGroup>
+                                        <div className="w-100 mt-2">
+                                            <InputGroup className="shadow-sm border border-secondary rounded overflow-hidden">
                                                 <Form.Control
                                                     type="text"
-                                                    placeholder="Type new board model..."
+                                                    placeholder="Input model designation..."
                                                     value={tempCustomModel}
                                                     onChange={e => setTempCustomModel(e.target.value)}
                                                     onKeyDown={e => {
                                                         if (e.key === 'Enter') confirmCustomModel();
                                                         if (e.key === 'Escape') cancelCustomModel();
                                                     }}
-                                                    className="bg-dark text-white border-warning placeholder-white"
+                                                    className="bg-black text-white border-0 p-3 small fw-bold"
                                                     autoFocus
                                                 />
-                                                <Button variant="success" className="fw-bold px-3" onClick={confirmCustomModel}>
-                                                    ✓ Confirm
+                                                <Button variant="success" className="fw-bold px-4 border-0" onClick={confirmCustomModel}>
+                                                    Confirm
                                                 </Button>
-                                                <Button variant="outline-warning" onClick={cancelCustomModel}>
-                                                    Cancel
+                                                <Button variant="secondary" className="fw-bold px-4 border-0" onClick={cancelCustomModel}>
+                                                    Back
                                                 </Button>
                                             </InputGroup>
-                                            <small className="text-warning mt-2 d-block fw-bold">
-                                                🚩 This will flag the model name for admin sequence alignment.
-                                            </small>
+                                            <div className="small fw-bold text-warning text-uppercase mt-3 opacity-100" style={{ fontSize: '10px', letterSpacing: '0.05em' }}>
+                                                🚩 This item will be flagged for administrative sequence verification.
+                                            </div>
                                         </div>
                                     )}
                                 </div>

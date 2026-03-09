@@ -1,15 +1,19 @@
-import { type PageProps } from "gatsby"
+import { type PageProps, navigate } from "gatsby"
 import React, { useState, useEffect, useMemo } from "react"
 import { Container, Card, Form, Button, Alert, Spinner, Tabs, Tab, Row, Col, Badge, Stack, InputGroup, Modal } from "react-bootstrap"
 import SiteNavbar from "../components/SiteNavbar"
 import SiteFooter from "../components/SiteFooter"
 import HardwareFields from "../components/Forms/HardwareFields"
-import { getSupabaseClient, Part } from "../lib/supabase"
+import { getSupabaseClient, Part, Brand, Model } from "../lib/supabase"
 import { SupabaseClient, User, AuthChangeEvent, Session } from "@supabase/supabase-js"
+import { Buffer } from "buffer"
+import { useBoardHook } from "../hooks/useBoardHook"
 
 // Admin UI Sync Force Rebuild 1.2
 const GlobalStyles = () => (
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    <>
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
+    </>
 );
 
 interface Taxonomy {
@@ -23,14 +27,8 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
     const author = part.author || part.submitted_by || "Unknown";
     const [imgError, setImgError] = useState(false);
 
-    // Get metadata from joined objects or fallback to legacy arrays
-    const brandName = (part as any).brands?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "No Platform");
-    const methodName = (part as any).fabrication_methods?.name || (part.fabrication_method && part.fabrication_method.length > 0 ? part.fabrication_method[0] : "");
-    const categoryName = (part as any).part_categories?.name || (part.type_of_part && part.type_of_part.length > 0 ? part.type_of_part[0] : "");
-    const modelName = (part as any).models?.name || part.board_model || "";
-
     return (
-        <Col xs={12} sm={12} md={6} lg={4} xl={4} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '320px', flexShrink: 0 }}>
+        <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }}>
             <div className="w-100 h-100 position-relative z-index-0">
                 <Card className="h-100 shadow-sm border-secondary db-card bg-dark text-light overflow-hidden">
                     <div className="card-img-holder position-relative overflow-hidden" style={{ aspectRatio: "16 / 9", height: "auto", width: "100%", backgroundColor: "#1a1d20" }}>
@@ -60,12 +58,13 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                         </Card.Subtitle>
 
                         <div className="mb-3">
-                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{brandName}</span>
+                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{(part as any).brands?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "No Platform")}</span>
                             <div className="d-flex flex-wrap gap-1">
-                                {categoryName && <Badge pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{categoryName}</Badge>}
-                                {methodName && <Badge pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{methodName}</Badge>}
+                                {(part as any).hardware_models?.name && <Badge pill bg="light" text="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{(part as any).hardware_models?.name}</Badge>}
+                                {part.board_model && !((part as any).hardware_models?.name) && <Badge pill bg="warning" text="dark" className="border border-dark py-1 px-2 text-truncate" style={{ maxWidth: '150px' }} title="Pending Model Creation">🚩 {part.board_model}</Badge>}
+                                {(part as any).part_categories?.name && <Badge pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{(part as any).part_categories?.name}</Badge>}
+                                {(part as any).fabrication_methods?.name && <Badge pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{(part as any).fabrication_methods?.name}</Badge>}
                                 {part.is_oem && <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-1 px-2">OEM</Badge>}
-                                {modelName && <Badge pill bg="warning" text="dark" className="py-1 px-2 border border-warning" style={{ fontSize: '0.7rem' }}>{modelName}</Badge>}
                             </div>
                         </div>
 
@@ -96,7 +95,6 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
     );
 };
 
-
 export default function AdminPage(props: PageProps) {
     const [isMounted, setIsMounted] = useState(false);
     const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
@@ -114,8 +112,6 @@ export default function AdminPage(props: PageProps) {
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
     const [fabricationMethods, setFabricationMethods] = useState<Taxonomy[]>([]);
     const [partCategories, setPartCategories] = useState<Taxonomy[]>([]);
-    const [brands, setBrands] = useState<any[]>([]);
-    const [models, setModels] = useState<any[]>([]);
     const [newFabMethod, setNewFabMethod] = useState("");
     const [newPartCategory, setNewPartCategory] = useState("");
     const [newPlatform, setNewPlatform] = useState("");
@@ -139,12 +135,67 @@ export default function AdminPage(props: PageProps) {
     const [newModelBrand, setNewModelBrand] = useState<string>("");
     const [newModelName, setNewModelName] = useState<string>("");
 
+    // Tab 6 & 7 Refactor States
+    const [editingBrandAdmin, setEditingBrandAdmin] = useState<Brand | null>(null);
+    const [editBrandName, setEditBrandName] = useState("");
+    const [editBrandOverview, setEditBrandOverview] = useState("");
+    const [editBrandImage, setEditBrandImage] = useState<string | null>(null);
+
+    const [selectedModelPlatform, setSelectedModelPlatform] = useState<string | null>(null);
+    const [isBrandSaving, setIsBrandSaving] = useState(false);
+
+    const [editingModelAdmin, setEditingModelAdmin] = useState<any | null>(null);
+    const [editModelName, setEditModelName] = useState("");
+    const [editModelDesc, setEditModelDesc] = useState("");
+    const [editModelImage, setEditModelImage] = useState<string | null>(null);
+    const [isModelSaving, setIsModelSaving] = useState(false);
+
+    const {
+        special: specialPlatformsData,
+        groupedBrands: alphabeticalBrandsData,
+        groupedModels,
+        brands,
+        models,
+        loading: isBoardLoading,
+        refresh: refreshBoardData
+    } = useBoardHook();
+
+    const [isActionLoading, setIsActionLoading] = useState(false);
+
     const [isLoading, setIsLoading] = useState(false);
     const [isHiddenLoading, setIsHiddenLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const [editingPart, setEditingPart] = useState<Part | null>(null);
     const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [registrySearchText, setRegistrySearchText] = useState("");
+
+    // Detect Tab from URL
+    const [activeTab, setActiveTab] = useState('queue');
+    const handleTabSelect = (k: string | null) => {
+        if (k) {
+            setActiveTab(k);
+            navigate(`/admin/${k}`, { replace: true });
+        }
+    };
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            const path = window.location.pathname;
+            const segments = path.split('/').filter(Boolean);
+            if (segments.length >= 2) {
+                setActiveTab(segments[1]);
+            }
+        }
+    }, []);
+
+    // Sync Page Title to internal Navigation
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            document.title = `/admin/${activeTab}`;
+        }
+    }, [activeTab]);
+
 
     const handleSaveEdit = async () => {
         if (!supabase || !editingPart || !editingPart.id) return;
@@ -189,6 +240,7 @@ export default function AdminPage(props: PageProps) {
     // Filtered lists
     const pendingParts = allActiveParts.filter(p => p.status === 'pending');
     const approvedParts = parts.filter(p => p.status === 'approved');
+    const trulyHiddenParts = hiddenParts.filter(p => p.status !== 'pending');
 
     // Registry audit duplicate lookup
     const duplicates = useMemo(() => {
@@ -202,27 +254,26 @@ export default function AdminPage(props: PageProps) {
         return Array.from(urlMap.values()).filter(group => group.length > 1);
     }, [parts]);
 
-    const groupedBoardModels = useMemo(() => {
-        const groups: Record<string, Set<any>> = {};
-
-        // Use the models taxonomy we fetched instead of scraping parts
-        models.forEach(m => {
-            const brand = brands.find(b => b.id === m.brand_id);
-            const brandName = brand ? brand.name : "Unknown Brand";
-            if (!groups[brandName]) groups[brandName] = new Set();
-            groups[brandName].add(m);
+    // Identify models that exist as strings but not in the registry
+    const ghostModels = useMemo(() => {
+        const ghostMap = new Map<string, { brand_id: string, brand_name: string, model_name: string, part_ids: string[] }>();
+        allActiveParts.forEach(p => {
+            if (p.board_model && !p.model_id) {
+                const key = `${p.platform_id || 'unknown'}:${p.board_model.trim().toLowerCase()}`;
+                if (!ghostMap.has(key)) {
+                    const brand = brands.find(b => b.id === p.platform_id);
+                    ghostMap.set(key, {
+                        brand_id: p.platform_id || 'unknown',
+                        brand_name: brand ? brand.name : "Unknown Brand",
+                        model_name: p.board_model.trim(),
+                        part_ids: []
+                    });
+                }
+                ghostMap.get(key)!.part_ids.push(p.id!);
+            }
         });
-
-        const result = Object.entries(groups).map(([brand, modelsSet]) => ({
-            brand,
-            models: Array.from(modelsSet).sort((a, b) => (a as any).name.localeCompare((b as any).name))
-        })).sort((a, b) => a.brand.localeCompare(b.brand));
-
-        return {
-            groups: result,
-            orphans: [] as string[]
-        };
-    }, [models, brands]);
+        return Array.from(ghostMap.values()).sort((a, b) => a.brand_name.localeCompare(b.brand_name) || a.model_name.localeCompare(b.model_name));
+    }, [allActiveParts, brands]);
 
     // Initial mount and client library check
     useEffect(() => {
@@ -289,7 +340,7 @@ export default function AdminPage(props: PageProps) {
             // Use table joins to get metadata names
             const { data: pData, error: pError } = await supabase
                 .from('parts')
-                .select('*, brands(name), part_categories(name), fabrication_methods(name), models(name)')
+                .select('*, brands(name), part_categories(name), fabrication_methods(name), hardware_models:model_id(name)')
                 .eq('is_hidden', false)
                 .is('deleted_at', null)
                 .order('created_at', { ascending: false });
@@ -303,11 +354,7 @@ export default function AdminPage(props: PageProps) {
             const { data: catData } = await supabase.from('part_categories').select('*').order('name');
             if (catData) setPartCategories(catData);
 
-            const { data: bData } = await supabase.from('brands').select('*').order('name');
-            if (bData) setBrands(bData);
 
-            const { data: modData } = await supabase.from('models').select('*').order('name');
-            if (modData) setModels(modData);
         } catch (err: any) {
             setError(err.message || 'Error fetching data.');
         } finally {
@@ -321,7 +368,7 @@ export default function AdminPage(props: PageProps) {
         try {
             const { data: hData, error: hError } = await supabase
                 .from('parts')
-                .select('*, brands(name), part_categories(name), fabrication_methods(name), models(name)')
+                .select('*, brands(name), part_categories(name), fabrication_methods(name), hardware_models:model_id(name)')
                 .eq('is_hidden', true)
                 .is('deleted_at', null)
                 .order('created_at', { ascending: false });
@@ -395,7 +442,43 @@ export default function AdminPage(props: PageProps) {
         if (!supabase) return;
         setActionLoadingId(id);
         try {
-            const { error: sbError } = await supabase.from('parts').update({ status: 'approved', is_hidden: false }).eq('id', id);
+            // Check if this part has a custom board model that needs creation
+            const part = pendingParts.find(p => p.id === id) || parts.find(p => p.id === id);
+            let updatePayload: any = { status: 'approved', is_hidden: false, needs_model_review: false };
+
+            if (part && part.board_model && part.needs_model_review && part.platform_id) {
+                // Try to create the model in the models table first
+                const brandObj = brands.find(b => b.id === part.platform_id);
+                const brandPrefix = brandObj ? `${brandObj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-` : '';
+                const modelSlug = `${brandPrefix}${generateSlug(part.board_model)}`;
+
+                const { data: newModel, error: modelError } = await supabase
+                    .from('models')
+                    .insert([{
+                        name: part.board_model.trim(),
+                        brand_id: part.platform_id,
+                        slug: modelSlug
+                    }])
+                    .select()
+                    .single();
+
+                if (!modelError && newModel) {
+                    updatePayload.model_id = newModel.id;
+                    updatePayload.board_model = null; // Clear legacy string
+                    refreshBoardData();
+                } else {
+                    console.error("Auto-model creation failed during approval:", modelError);
+                    if (modelError?.code === '23505') {
+                        setError(`Conflict: A model with the slug "${modelSlug}" already exists. Please manually link or rename.`);
+                        setActionLoadingId(null);
+                        return;
+                    }
+                    // We'll still allow manual approval if it's just a generic error, but notify
+                    setError("Auto-model creation failed: " + (modelError?.message || "Check console"));
+                }
+            }
+
+            const { error: sbError } = await supabase.from('parts').update(updatePayload).eq('id', id);
             if (sbError) throw sbError;
 
             // Re-fetch to correctly distribute the part into the approved state
@@ -595,7 +678,7 @@ export default function AdminPage(props: PageProps) {
             if (sbError) throw sbError;
 
             if (data && data.length) {
-                setBrands(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
+                refreshBoardData();
                 setNewPlatform('');
             }
         } catch (err: any) {
@@ -605,68 +688,137 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
-    const handleUpdatePlatform = async () => {
-        if (!selectedPlatform || !editPlatformName.trim() || !supabase) return;
-        setIsLoading(true);
-        try {
-            const { error: sbError } = await supabase.from('brands').update({ name: editPlatformName.trim() }).eq('id', selectedPlatform.id);
-            if (sbError) throw sbError;
-            setBrands(prev => prev.map(c => c.id === selectedPlatform.id ? { ...c, name: editPlatformName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
-            setSelectedPlatform(null);
-            setEditPlatformName("");
-        } catch (err: any) {
-            setError('Failed to update platform: ' + (err.message || String(err)));
-        } finally {
-            setIsLoading(false);
-        }
-    };
-
     const handleConfirmDeletePlatform = async () => {
-        if (!selectedPlatform || !supabase) return;
+        const target = editingBrandAdmin || selectedPlatform;
+        if (!target || !supabase) return;
         setIsLoading(true);
         try {
-            const id = selectedPlatform.id;
+            const id = target.id;
             const { error: sbError } = await supabase.from('brands').delete().eq('id', id);
             if (sbError) throw sbError;
-            setBrands(prev => prev.filter(c => c.id !== id));
+            refreshBoardData();
             setSelectedPlatform(null);
+            setEditingBrandAdmin(null);
             setPlatformDeleteConfirm(false);
         } catch (err: any) {
             setError('Failed to delete platform: ' + (err.message || String(err)));
             fetchData();
         } finally {
-            setIsLoading(false);
+            // Cleanup states
+        }
+    };
+    const handleUpdateBrandAdvanced = async () => {
+        if (!supabase || !editingBrandAdmin) return;
+        setIsBrandSaving(true);
+        try {
+            const { error: sbError } = await supabase
+                .from('brands')
+                .update({
+                    name: editBrandName.trim(),
+                    slug: generateSlug(editBrandName),
+                    description: editBrandOverview.trim(),
+                    image_url: editBrandImage
+                })
+                .eq('id', editingBrandAdmin.id);
+
+            if (sbError) throw sbError;
+            setEditingBrandAdmin(null);
+            refreshBoardData();
+        } catch (err: any) {
+            setError('Failed to update brand: ' + err.message);
+        } finally {
+            setIsBrandSaving(false);
         }
     };
 
-    const handleUpdateBoardModel = async () => {
-        if (!editBoardModelOld || !supabase) return;
-        setIsLoading(true);
+    const handleUpdateModelAdvanced = async () => {
+        if (!supabase || !editingModelAdmin) return;
+        setIsModelSaving(true);
         try {
-            const newValue = editBoardModelNew.trim();
-            if (!newValue) return;
-
-            // Find the model object
-            const modelObj = models.find(m => m.name === editBoardModelOld);
-            if (!modelObj) throw new Error("Model not found in taxonomy.");
-
+            // NOTE: models table is currently missing an image column in schema.
+            // This update handles name and description.
             const { error: sbError } = await supabase
                 .from('models')
-                .update({ name: newValue })
-                .eq('id', modelObj.id);
+                .update({
+                    name: editModelName.trim(),
+                    description: editModelDesc.trim(),
+                    image_url: editModelImage
+                })
+                .eq('id', editingModelAdmin.id);
 
             if (sbError) throw sbError;
-
-            // Refresh models
-            const { data: modData } = await supabase.from('models').select('*').order('name');
-            if (modData) setModels(modData);
-
-            setEditBoardModelOld("");
-            setEditBoardModelNew("");
+            setEditingModelAdmin(null);
+            refreshBoardData();
         } catch (err: any) {
-            setError('Failed to update board model: ' + (err.message || String(err)));
+            setError('Failed to update model: ' + err.message);
         } finally {
-            setIsLoading(false);
+            setIsModelSaving(false);
+        }
+    };
+
+    const sanitizeFileName = (fileName: string) => {
+        return fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    };
+
+    const handleImageUpload = async (type: 'brands' | 'models', id: string, file: File) => {
+        if (!file || !supabase) return;
+        setIsActionLoading(true);
+        console.log(`📡 STARTING NATIVE UPLOAD [${type}]:`, { id, fileName: file.name, size: file.size });
+
+        try {
+            const safeFileName = sanitizeFileName(file.name);
+            const filePath = `${type}/${id || 'new'}/${Date.now()}_${safeFileName}`;
+
+            // 3. NATIVE UPLOAD
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('brand-assets')
+                .upload(filePath, file, { upsert: true });
+
+            if (uploadError) {
+                console.error("❌ UPLOAD ERROR:", {
+                    message: uploadError.message,
+                    details: (uploadError as any).details,
+                    hint: (uploadError as any).hint
+                });
+                throw uploadError;
+            }
+
+            // 5. GET PUBLIC URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('brand-assets')
+                .getPublicUrl(filePath);
+
+            console.log("✅ Upload Success. Public URL:", publicUrl);
+
+            // 6. SYNC DATABASE
+            // Note: We update 'image_url' for brands. For models, the schema may need review, but we'll attempt same column first as per instructions.
+            const targetColumn = type === 'brands' ? 'image_url' : 'image_url'; // User specified image_url in step 6
+            const { error: dbError } = await supabase
+                .from(type)
+                .update({ [targetColumn]: publicUrl })
+                .eq('id', id);
+
+            if (dbError) {
+                console.error(`❌ DB SYNC ERROR [${type}]:`, {
+                    message: dbError.message,
+                    details: dbError.details,
+                    hint: dbError.hint
+                });
+                // We still update local state so the preview works
+            }
+
+            if (type === 'brands') {
+                setEditBrandImage(publicUrl);
+            } else {
+                setEditModelImage(publicUrl);
+            }
+
+            await refreshBoardData();
+        } catch (err: any) {
+            console.error("❌ PIPELINE FAILURE:", err);
+            setError('Upload failed: ' + (err.message || String(err)));
+        } finally {
+            setIsActionLoading(false);
         }
     };
 
@@ -674,31 +826,75 @@ export default function AdminPage(props: PageProps) {
         return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
     };
 
-    const handleAddBoardModel = async () => {
-        if (!newModelBrand || !newModelName.trim() || !supabase) return;
+    const handlePromoteModel = async (ghost: { brand_id: string, model_name: string, part_ids: string[] }) => {
+        if (!supabase) return;
+        setIsActionLoading(true);
+        try {
+            const brandObj = brands.find(b => b.id === ghost.brand_id);
+            const brandPrefix = brandObj ? `${brandObj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-` : '';
+            const slug = `${brandPrefix}${generateSlug(ghost.model_name)}`;
+
+            // 1. Create the model
+            const { data: newModel, error: modelError } = await supabase
+                .from('models')
+                .insert([{
+                    name: ghost.model_name,
+                    brand_id: ghost.brand_id,
+                    slug
+                }])
+                .select()
+                .single();
+
+            if (modelError) throw modelError;
+
+            // 2. Update all parts
+            const { error: updateError } = await supabase
+                .from('parts')
+                .update({
+                    model_id: newModel.id,
+                    board_model: null,
+                    needs_model_review: false
+                })
+                .in('id', ghost.part_ids);
+
+            if (updateError) throw updateError;
+
+            refreshBoardData();
+            fetchData();
+            fetchHiddenData();
+        } catch (err: any) {
+            setError('Failed to promote model: ' + (err.message || String(err)));
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleAddBoardModelWithName = async (brandName: string) => {
+        if (!brandName || !newModelName.trim() || !supabase) return;
         setIsLoading(true);
         try {
-            // Find the brand ID for the selected brand name
-            const brandObj = brands.find(b => b.name === newModelBrand);
+            // Find the brand object for the selected brand name
+            const brandObj = brands.find(b => b.name === brandName);
             if (!brandObj) throw new Error("Selected platform/brand not found.");
 
-            const slug = generateSlug(newModelName);
-            const { data, error: sbError } = await supabase
+            // Create a brand-prefixed slug to avoid cross-brand collisions
+            const brandSlug = brandObj.slug || brandObj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+            const modelSlug = generateSlug(newModelName);
+            const slug = `${brandSlug}-${modelSlug}`;
+
+            const { error: sbError } = await supabase
                 .from('models')
-                .insert([{ name: newModelName.trim(), brand_id: brandObj.id, slug }])
-                .select();
+                .insert([{
+                    name: newModelName.trim(),
+                    brand_id: brandObj.id,
+                    slug
+                }]);
 
             if (sbError) throw sbError;
 
-            if (data && data.length) {
-                setModels(prev => [...prev, data[0]].sort((a, b) => a.name.localeCompare(b.name)));
-            }
-
-            setShowAddModel(false);
-            setNewModelBrand("");
+            // Success feedback
             setNewModelName("");
-            setEditBoardModelOld("");
-            setEditBoardModelNew("");
+            refreshBoardData();
         } catch (err: any) {
             setError('Failed to add board model: ' + (err.message || String(err)));
         } finally {
@@ -774,7 +970,6 @@ export default function AdminPage(props: PageProps) {
 
     return (
         <div className="bg-black text-light min-vh-100 d-flex flex-column pb-5 page-items">
-            <GlobalStyles />
             <style dangerouslySetInnerHTML={{
                 __html: `
                 .bg-secondary { background-color: #121417 !important; } 
@@ -786,6 +981,21 @@ export default function AdminPage(props: PageProps) {
                 .template-badge { transition: all 0.2s; }
                 .template-badge:hover { opacity: 0.8; }
                 .cursor-pointer { cursor: pointer; }
+                .tab-count { font-size: 0.8rem; opacity: 0.7; margin-left: 5px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 10px; }
+                
+                /* Shared Brand Styles */
+                .brand-header-box { background: #0B0E14; border: 1px solid #1a1d20; border-radius: 2rem; overflow: hidden; box-shadow: 0 1rem 3rem rgba(0,0,0,0.5); }
+                .featured-model-card { background: rgba(11, 14, 20, 0.5); border: 1px solid rgba(0, 229, 255, 0.2); border-radius: 1.5rem; backdrop-filter: blur(10px); }
+                .text-tracking-widest { letter-spacing: 0.3em; }
+                .fw-black { font-weight: 900; }
+                .letter-spacing-1 { letter-spacing: 0.1em; }
+                .letter-spacing-2 { letter-spacing: 0.2em; }
+                .italic { font-style: italic; }
+                
+                /* Admin Preview Scaling - Balanced for XL Modal */
+                .admin-preview-scaler { transform: scale(1); transform-origin: top center; width: 100%; margin-top: 2rem; }
+                @media (max-width: 1400px) { .admin-preview-scaler { transform: scale(0.85); width: 118%; margin: 1rem -9%; } }
+                @media (max-width: 1215px) { .admin-preview-scaler { transform: scale(0.7); width: 142%; margin: -6rem -21%; } }
             ` }} />
             <SiteNavbar />
 
@@ -800,7 +1010,8 @@ export default function AdminPage(props: PageProps) {
 
                 {error && <Alert variant="danger" onClose={() => setError(null)} dismissible>{error}</Alert>}
 
-                <Tabs defaultActiveKey="queue" id="admin-tabs" className="mb-5 admin-tabs border-secondary">
+                <Tabs activeKey={activeTab} onSelect={handleTabSelect} id="admin-tabs" className="mb-5 admin-tabs border-secondary">
+
 
                     {/* 1. Review Queue */}
                     <Tab eventKey="queue" title={`1. Review Queue (${pendingParts.length})`}>
@@ -809,18 +1020,18 @@ export default function AdminPage(props: PageProps) {
                                 <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
                             ) : pendingParts.length === 0 ? (
                                 <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    No pending submissions found.
+                                    Queue clear. Everything is up to date!
                                 </div>
                             ) : (
-                                <Row>
+                                <Row className="g-4">
                                     {pendingParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
                                             <>
-                                                <Button variant="success" size="sm" className="w-50 fw-bold" onClick={() => handleApprove(part.id!)} disabled={actionLoadingId === part.id}>
+                                                <Button variant="outline-success" size="sm" className="w-50 fw-bold" onClick={() => handleApprove(part.id!)} disabled={actionLoadingId === part.id}>
                                                     {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Approve'}
                                                 </Button>
-                                                <Button variant="danger" size="sm" className="w-50 fw-bold" onClick={() => handlePermDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Reject/Del'}
+                                                <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handlePermDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
+                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Purge'}
                                                 </Button>
                                             </>
                                         } />
@@ -869,29 +1080,44 @@ export default function AdminPage(props: PageProps) {
                     <Tab eventKey="registry" title="3. Full Registry">
                         <div className="mt-4">
                             <div className="d-flex justify-content-between align-items-end mb-4">
-                                <h4 className="fw-bold mb-0">Active JSON Registry</h4>
-                                <Badge bg="secondary" className="px-3 py-2">{approvedParts.length} Total Parts</Badge>
+                                <div>
+                                    <h5 className="text-info fw-bold mb-1">Central Asset Index</h5>
+                                </div>
+                                <Badge bg="secondary" className="px-3 py-2 border border-secondary shadow-sm">{approvedParts.length} Total Records</Badge>
                             </div>
+
+                            <InputGroup className="mb-4 shadow-sm">
+                                <Form.Control
+                                    type="text"
+                                    placeholder="Live filter by title, author, or id..."
+                                    className="input-contrast p-3"
+                                    value={registrySearchText}
+                                    onChange={e => setRegistrySearchText(e.target.value)}
+                                />
+                            </InputGroup>
+
                             {isLoading ? (
                                 <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
-                            ) : approvedParts.length === 0 ? (
+                            ) : approvedParts.filter(p => (p.title + (p.author || '') + p.id).toLowerCase().includes(registrySearchText.toLowerCase())).length === 0 ? (
                                 <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    No approved parts found.
+                                    No records found matching "{registrySearchText}"
                                 </div>
                             ) : (
-                                <Row>
-                                    {approvedParts.map(part => (
-                                        <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                            <>
-                                                <Button variant="outline-warning" size="sm" className="w-50 fw-bold" onClick={() => handleHidePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Hide'}
-                                                </Button>
-                                                <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handleSoftDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete'}
-                                                </Button>
-                                            </>
-                                        } />
-                                    ))}
+                                <Row className="g-4">
+                                    {approvedParts
+                                        .filter(p => (p.title + (p.author || '') + p.id).toLowerCase().includes(registrySearchText.toLowerCase()))
+                                        .map(part => (
+                                            <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
+                                                <>
+                                                    <Button variant="outline-warning" size="sm" className="w-50 fw-bold" onClick={() => handleHidePart(part.id!)} disabled={actionLoadingId === part.id}>
+                                                        {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Hide'}
+                                                    </Button>
+                                                    <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handleSoftDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
+                                                        {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete'}
+                                                    </Button>
+                                                </>
+                                            } />
+                                        ))}
                                 </Row>
                             )}
                         </div>
@@ -900,8 +1126,8 @@ export default function AdminPage(props: PageProps) {
                     {/* 4. Part Categories */}
                     <Tab eventKey="categories" title="4. Part Categories">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <h5 className="text-info fw-bold mb-3">Part Categories</h5>
-                            <p className="text-muted small mb-4">Add or remove part categories globally (e.g. Battery, Motor, Deck).</p>
+                            <h5 className="text-info fw-bold mb-3">Terminology & Tags</h5>
+                            <p className="text-muted small mb-4">Add or remove part categories globally.</p>
 
                             <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
                                 <div className="d-flex flex-wrap gap-2">
@@ -920,7 +1146,7 @@ export default function AdminPage(props: PageProps) {
                                     {partCategoryDeleteConfirm ? (
                                         <Alert variant="danger" className="mb-0 bg-transparent border-danger text-danger d-flex flex-column gap-3">
                                             <div>
-                                                <strong>Confirm Deletion:</strong> Are you sure you want to permanently delete the category <span className="fw-bold px-1 text-white bg-dark rounded">{selectedPartCategory.name}</span> globally?
+                                                <strong>Confirm Deletion:</strong> Are you sure? Deleting <span className="fw-bold px-1 text-white bg-dark rounded">{selectedPartCategory.name}</span> will clear it from all parts.
                                             </div>
                                             <div className="d-flex gap-2">
                                                 <Button variant="danger" className="fw-bold" onClick={handleConfirmDeletePartCategory}>Yes, Delete</Button>
@@ -943,7 +1169,7 @@ export default function AdminPage(props: PageProps) {
                             )}
 
                             <InputGroup className="w-100 shadow-sm">
-                                <Form.Control type="text" placeholder="Enter new category name (e.g. Remote)..." className="input-contrast p-3" value={newPartCategory} onChange={e => setNewPartCategory(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPartCategory()} />
+                                <Form.Control type="text" placeholder="Enter new category name..." className="input-contrast p-3" value={newPartCategory} onChange={e => setNewPartCategory(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPartCategory()} />
                                 <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddPartCategory}>Add Category</Button>
                             </InputGroup>
                         </div>
@@ -952,8 +1178,8 @@ export default function AdminPage(props: PageProps) {
                     {/* 5. Fabrication Methods */}
                     <Tab eventKey="fabrication_methods" title="5. Fabrication Methods">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <h5 className="text-info fw-bold mb-3">Fabrication Methods</h5>
-                            <p className="text-muted small mb-4">Add or remove fabrication methods (e.g. 3D Print, CNC, Injection Molded).</p>
+                            <h5 className="text-info fw-bold mb-3">Fabrication Protocols</h5>
+                            <p className="text-muted small mb-4">Add or remove fabrication methods globally.</p>
 
                             <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
                                 <div className="d-flex flex-wrap gap-2">
@@ -972,7 +1198,7 @@ export default function AdminPage(props: PageProps) {
                                     {fabMethodDeleteConfirm ? (
                                         <Alert variant="danger" className="mb-0 bg-transparent border-danger text-danger d-flex flex-column gap-3">
                                             <div>
-                                                <strong>Confirm Deletion:</strong> Are you sure you want to permanently delete the method <span className="fw-bold px-1 text-white bg-dark rounded">{selectedFabMethod.name}</span> globally?
+                                                <strong>Confirm Deletion:</strong> Are you sure? Deleting <span className="fw-bold px-1 text-white bg-dark rounded">{selectedFabMethod.name}</span> will clear it from all parts.
                                             </div>
                                             <div className="d-flex gap-2">
                                                 <Button variant="danger" className="fw-bold" onClick={handleConfirmDeleteFabMethod}>Yes, Delete</Button>
@@ -995,7 +1221,7 @@ export default function AdminPage(props: PageProps) {
                             )}
 
                             <InputGroup className="w-100 shadow-sm">
-                                <Form.Control type="text" placeholder="Enter new fabrication method (e.g. Carbon Fiber)..." className="input-contrast p-3" value={newFabMethod} onChange={e => setNewFabMethod(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddFabMethod()} />
+                                <Form.Control type="text" placeholder="Enter new fabrication method..." className="input-contrast p-3" value={newFabMethod} onChange={e => setNewFabMethod(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddFabMethod()} />
                                 <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddFabMethod}>Add Method</Button>
                             </InputGroup>
                         </div>
@@ -1005,410 +1231,304 @@ export default function AdminPage(props: PageProps) {
                     <Tab eventKey="platforms" title="6. Board Platforms">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
                             <h5 className="text-info fw-bold mb-3">Manufacturers & Platforms</h5>
-                            <p className="text-muted small mb-4">Add or remove board platforms globally. Changes update `platforms.json` upon publishing.</p>
+                            <p className="text-muted small mb-4">Add or remove board platforms globally.</p>
 
-                            {isLoading ? (
+                            {isBoardLoading ? (
                                 <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
                             ) : (
                                 <>
-                                    <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
-                                        {(() => {
-                                            const pinnedStreet = brands.find(p => p.name === "Street (DIY/Generic)");
-                                            const pinnedOffroad = brands.find(p => p.name === "Off-Road (DIY/Generic)");
-                                            const pinnedMisc = brands.find(p => p.name === "Misc" || p.name === "Miscellaneous");
+                                    <div className="bg-black p-4 rounded border border-secondary mb-5 shadow-inner">
+                                        <div className="mb-4 pb-4 border-bottom border-secondary">
+                                            <div className="text-center mb-3">
+                                                <span className="text-info fw-bold text-uppercase letter-spacing-1 small">Special Platforms</span>
+                                            </div>
+                                            <div className="d-flex flex-column gap-2 mx-auto" style={{ maxWidth: "400px" }}>
+                                                {specialPlatformsData.map(brand => (
+                                                    <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm">
+                                                        <span className="small fw-bold text-light ms-2">{brand.name}</span>
+                                                        <Button
+                                                            variant="outline-info"
+                                                            size="sm"
+                                                            className="py-1 px-3 fw-bold"
+                                                            onClick={() => {
+                                                                setEditingBrandAdmin(brand);
+                                                                setEditBrandName(brand.name);
+                                                                setEditBrandOverview(brand.description || "");
+                                                                setEditBrandImage(brand.image_url || null);
+                                                            }}
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
 
-                                            const others = brands.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(p.name));
-                                            const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
-                                            const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
-                                            const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
+                                        <div className="text-center mb-4">
+                                            <span className="text-info fw-bold text-uppercase letter-spacing-1 small">Alphabetical Registry</span>
+                                        </div>
 
-                                            return (
-                                                <>
-                                                    <Row className="g-3 mb-4">
-                                                        <Col xs={12} lg={4}>
-                                                            {pinnedStreet && (
-                                                                <Badge
-                                                                    bg={selectedPlatform?.id === pinnedStreet.id ? "primary" : "secondary"}
-                                                                    className={`p-3 border cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center ${selectedPlatform?.id === pinnedStreet.id ? 'border-primary' : 'border-dark'}`}
-                                                                    style={{ fontSize: "0.85rem", transition: 'all 0.2s' }}
-                                                                    onClick={() => { setSelectedPlatform(pinnedStreet); setEditPlatformName(pinnedStreet.name); setPlatformDeleteConfirm(false); }}
-                                                                >
-                                                                    {pinnedStreet.name}
-                                                                </Badge>
-                                                            )}
-                                                        </Col>
-                                                        <Col xs={12} lg={4}>
-                                                            {pinnedOffroad && (
-                                                                <Badge
-                                                                    bg={selectedPlatform?.id === pinnedOffroad.id ? "primary" : "secondary"}
-                                                                    className={`p-3 border cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center ${selectedPlatform?.id === pinnedOffroad.id ? 'border-primary' : 'border-dark'}`}
-                                                                    style={{ fontSize: "0.85rem", transition: 'all 0.2s' }}
-                                                                    onClick={() => { setSelectedPlatform(pinnedOffroad); setEditPlatformName(pinnedOffroad.name); setPlatformDeleteConfirm(false); }}
-                                                                >
-                                                                    {pinnedOffroad.name}
-                                                                </Badge>
-                                                            )}
-                                                        </Col>
-                                                        <Col xs={12} lg={4}>
-                                                            {pinnedMisc && (
-                                                                <Badge
-                                                                    bg={selectedPlatform?.id === pinnedMisc.id ? "primary" : "secondary"}
-                                                                    className={`p-3 border cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center ${selectedPlatform?.id === pinnedMisc.id ? 'border-primary' : 'border-dark'}`}
-                                                                    style={{ fontSize: "0.85rem", transition: 'all 0.2s' }}
-                                                                    onClick={() => { setSelectedPlatform(pinnedMisc); setEditPlatformName(pinnedMisc.name); setPlatformDeleteConfirm(false); }}
-                                                                >
-                                                                    {pinnedMisc.name}
-                                                                </Badge>
-                                                            )}
-                                                        </Col>
-                                                    </Row>
+                                        <Row className="g-4">
+                                            <Col md={4}>
+                                                <div className="text-center mb-2">
+                                                    <span className="small fw-bold text-muted uppercase letter-spacing-1">0-9 / A - I</span>
+                                                </div>
+                                                <div className="d-flex flex-column gap-2">
+                                                    {alphabeticalBrandsData.group1.map(brand => (
+                                                        <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm">
+                                                            <span className="small fw-bold text-light ms-2 text-truncate pe-2">{brand.name}</span>
+                                                            <Button
+                                                                variant="outline-info"
+                                                                size="sm"
+                                                                className="py-1 px-3 fw-bold"
+                                                                onClick={() => {
+                                                                    setEditingBrandAdmin(brand);
+                                                                    setEditBrandName(brand.name);
+                                                                    setEditBrandOverview(brand.description || "");
+                                                                    setEditBrandImage(brand.image_url || null);
+                                                                }}
+                                                            >
+                                                                Edit
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Col>
 
-                                                    <h3 className="h6 fw-bold text-light mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
+                                            <Col md={4}>
+                                                <div className="text-center mb-2">
+                                                    <span className="small fw-bold text-muted uppercase letter-spacing-1">J - R</span>
+                                                </div>
+                                                <div className="d-flex flex-column gap-2">
+                                                    {alphabeticalBrandsData.group2.map(brand => (
+                                                        <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm">
+                                                            <span className="small fw-bold text-light ms-2 text-truncate pe-2">{brand.name}</span>
+                                                            <Button
+                                                                variant="outline-info"
+                                                                size="sm"
+                                                                className="py-1 px-3 fw-bold"
+                                                                onClick={() => {
+                                                                    setEditingBrandAdmin(brand);
+                                                                    setEditBrandName(brand.name);
+                                                                    setEditBrandOverview(brand.description || "");
+                                                                    setEditBrandImage(brand.image_url || null);
+                                                                }}
+                                                            >
+                                                                Edit
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Col>
 
-                                                    <Row className="g-4">
-                                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                            <div className="text-center mb-1">
-                                                                <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
-                                                            </div>
-                                                            <div className="d-flex flex-wrap gap-2">
-                                                                {group1.map(opt => (
-                                                                    <Badge
-                                                                        key={opt.id}
-                                                                        role="button"
-                                                                        bg={selectedPlatform?.id === opt.id ? "primary" : "secondary"}
-                                                                        className={`p-2 border cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm ${selectedPlatform?.id === opt.id ? 'border-primary' : 'border-dark'}`}
-                                                                        style={{ minWidth: "46%", transition: 'all 0.2s' }}
-                                                                        onClick={() => { setSelectedPlatform(opt); setEditPlatformName(opt.name); setPlatformDeleteConfirm(false); }}
-                                                                    >
-                                                                        {opt.name}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </Col>
-                                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                            <div className="text-center mb-1">
-                                                                <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
-                                                            </div>
-                                                            <div className="d-flex flex-wrap gap-2">
-                                                                {group2.map(opt => (
-                                                                    <Badge
-                                                                        key={opt.id}
-                                                                        role="button"
-                                                                        bg={selectedPlatform?.id === opt.id ? "primary" : "secondary"}
-                                                                        className={`p-2 border cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm ${selectedPlatform?.id === opt.id ? 'border-primary' : 'border-dark'}`}
-                                                                        style={{ minWidth: "46%", transition: 'all 0.2s' }}
-                                                                        onClick={() => { setSelectedPlatform(opt); setEditPlatformName(opt.name); setPlatformDeleteConfirm(false); }}
-                                                                    >
-                                                                        {opt.name}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </Col>
-                                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                            <div className="text-center mb-1">
-                                                                <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
-                                                            </div>
-                                                            <div className="d-flex flex-wrap gap-2">
-                                                                {group3.map(opt => (
-                                                                    <Badge
-                                                                        key={opt.id}
-                                                                        role="button"
-                                                                        bg={selectedPlatform?.id === opt.id ? "primary" : "secondary"}
-                                                                        className={`p-2 border cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm ${selectedPlatform?.id === opt.id ? 'border-primary' : 'border-dark'}`}
-                                                                        style={{ minWidth: "46%", transition: 'all 0.2s' }}
-                                                                        onClick={() => { setSelectedPlatform(opt); setEditPlatformName(opt.name); setPlatformDeleteConfirm(false); }}
-                                                                    >
-                                                                        {opt.name}
-                                                                    </Badge>
-                                                                ))}
-                                                            </div>
-                                                        </Col>
-                                                    </Row>
-
-                                                    {brands.length === 0 && <span className="text-muted small p-2 d-block text-center mt-3">No platforms defined yet.</span>}
-                                                </>
-                                            );
-                                        })()}
+                                            <Col md={4}>
+                                                <div className="text-center mb-2">
+                                                    <span className="small fw-bold text-muted uppercase letter-spacing-1">S - Z</span>
+                                                </div>
+                                                <div className="d-flex flex-column gap-2">
+                                                    {alphabeticalBrandsData.group3.map(brand => (
+                                                        <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm">
+                                                            <span className="small fw-bold text-light ms-2 text-truncate pe-2">{brand.name}</span>
+                                                            <Button
+                                                                variant="outline-info"
+                                                                size="sm"
+                                                                className="py-1 px-3 fw-bold"
+                                                                onClick={() => {
+                                                                    setEditingBrandAdmin(brand);
+                                                                    setEditBrandName(brand.name);
+                                                                    setEditBrandOverview(brand.description || "");
+                                                                    setEditBrandImage(brand.image_url || null);
+                                                                }}
+                                                            >
+                                                                Edit
+                                                            </Button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </Col>
+                                        </Row>
                                     </div>
 
-                                    {selectedPlatform && (
-                                        <div className="mb-4 p-4 bg-secondary border border-secondary rounded shadow-sm">
-                                            <h6 className="text-info fw-bold mb-3">Modify Platform: <span className="text-white">{selectedPlatform.name}</span></h6>
-                                            {platformDeleteConfirm ? (
-                                                <Alert variant="danger" className="mb-0 bg-transparent border-danger text-danger d-flex flex-column gap-3">
-                                                    <div>
-                                                        <strong>Confirm Deletion:</strong> Are you sure you want to permanently delete the platform <span className="fw-bold px-1 text-white bg-dark rounded">{selectedPlatform.name}</span> globally? This will affect parts using this tag.
-                                                    </div>
-                                                    <div className="d-flex gap-2">
-                                                        <Button variant="danger" className="fw-bold" onClick={handleConfirmDeletePlatform}>Yes, Delete</Button>
-                                                        <Button variant="secondary" onClick={() => setPlatformDeleteConfirm(false)}>Cancel</Button>
-                                                    </div>
-                                                </Alert>
-                                            ) : (
-                                                <div className="d-flex flex-column gap-3">
-                                                    <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
-                                                        <Form.Control type="text" className="input-contrast p-3 border-0" value={editPlatformName} onChange={e => setEditPlatformName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdatePlatform()} />
-                                                        <Button variant="success" className="fw-bold px-4 border-0" onClick={handleUpdatePlatform} disabled={editPlatformName.trim() === selectedPlatform.name || !editPlatformName.trim()}>Save Name</Button>
-                                                    </InputGroup>
-                                                    <div className="d-flex justify-content-between">
-                                                        <Button variant="secondary" size="sm" className="fw-bold" onClick={() => setSelectedPlatform(null)}>Close Editor</Button>
-                                                        <Button variant="outline-danger" size="sm" onClick={() => setPlatformDeleteConfirm(true)}>Delete "{selectedPlatform.name}"</Button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-
                                     <InputGroup className="w-100 shadow-sm">
-                                        <Form.Control type="text" placeholder="Enter new platform name (e.g. Exway)..." className="input-contrast p-3" value={newPlatform} onChange={e => setNewPlatform(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlatform()} />
-                                        <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddPlatform}>Add Platform</Button>
+                                        <Form.Control type="text" placeholder="Enter new platform name..." className="input-contrast p-3" value={newPlatform} onChange={e => setNewPlatform(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddPlatform()} />
+                                        <Button variant="primary" className="fw-bold px-4 px-md-5 border-secondary" onClick={handleAddPlatform}>Add Brand</Button>
                                     </InputGroup>
                                 </>
                             )}
                         </div>
                     </Tab>
 
-                    {/* 7. Manage Board Models */}
-                    <Tab eventKey="models" title="7. Manage Board Models">
+                    {/* 7. Manage Hardware Models */}
+                    <Tab eventKey="models" title="7. Manage Hardware Models">
                         <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <div className="d-flex justify-content-between align-items-center mb-3">
-                                <h5 className="text-info fw-bold mb-0">Hardware Context (Board Models)</h5>
-                                <Button variant="primary" className="fw-bold px-3 py-2 shadow-sm border border-secondary" onClick={() => { setShowAddModel(!showAddModel); setNewModelBrand(""); setNewModelName(""); setEditBoardModelOld(""); setEditBoardModelNew(""); }}>
-                                    {showAddModel ? 'Close Tool' : 'Add Board Model'}
-                                </Button>
+                            <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary">
+                                <div>
+                                    <h5 className="text-info fw-bold mb-1">Hardware Models Registry</h5>
+                                    <p className="text-muted small mb-0">Select a platform to manage its specific board models.</p>
+                                </div>
+                                {selectedModelPlatform && (
+                                    <Button variant="outline-info" size="sm" className="fw-bold px-4" onClick={() => setSelectedModelPlatform(null)}>
+                                        &larr; Back to Platforms
+                                    </Button>
+                                )}
                             </div>
-                            <p className="text-muted small mb-4">Board models are dynamic tags attached directly to parts. Grouped by their primary manufacturer context below.</p>
 
-                            {/* ADD NEW MODEL TOOL */}
-                            {showAddModel && (
-                                <div className="mb-5 p-4 bg-secondary border border-secondary rounded shadow-sm">
-                                    <h6 className="text-white fw-bold mb-4 border-bottom border-secondary pb-2">Add New Board Model</h6>
+                            {/* Reconciliation Section (Always high priority) */}
+                            {ghostModels.length > 0 && (
+                                <div className="mb-5 p-4 bg-black bg-opacity-50 border border-warning border-opacity-25 rounded shadow-sm">
+                                    <div className="d-flex align-items-center gap-2 mb-4">
+                                        <Badge bg="warning" text="dark" className="p-2 border border-dark">ACTION REQUIRED</Badge>
+                                        <h6 className="text-warning fw-bold mb-0 text-uppercase letter-spacing-1">Model Reconciliation Needed</h6>
+                                    </div>
+                                    <p className="small text-muted mb-4 italic">
+                                        The following models exist in the parts registry but are missing from the official hardware database.
+                                        Clicking "Promote" will create a registry entry and link all associated parts automatically.
+                                    </p>
+                                    <div className="d-flex flex-column gap-3">
+                                        {ghostModels.map((ghost, i) => (
+                                            <div key={i} className="bg-secondary bg-opacity-25 p-3 rounded border border-secondary d-flex justify-content-between align-items-center shadow-inner">
+                                                <div>
+                                                    <span className="text-info small fw-bold text-uppercase d-block mb-1">{ghost.brand_name}</span>
+                                                    <span className="text-white fw-bold">{ghost.model_name}</span>
+                                                    <Badge bg="none" className="ms-2 border border-secondary text-muted small">{ghost.part_ids.length} parts affected</Badge>
+                                                </div>
+                                                <Button
+                                                    variant="success"
+                                                    size="sm"
+                                                    className="fw-bold px-4"
+                                                    onClick={() => handlePromoteModel(ghost)}
+                                                    disabled={isActionLoading}
+                                                >
+                                                    {isActionLoading ? <Spinner animation="border" size="sm" /> : 'Promote to Registry'}
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
-                                    <div className="mb-4">
-                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-3">1. Select Parent Brand (Platform) *</Form.Label>
-                                        <div className="bg-black p-4 rounded border border-secondary shadow-inner">
-                                            {(() => {
-                                                const pinnedStreet = brands.find(p => p.name === "Street (DIY/Generic)");
-                                                const pinnedOffroad = brands.find(p => p.name === "Off-Road (DIY/Generic)");
-                                                const pinnedMisc = brands.find(p => p.name === "Misc" || p.name === "Miscellaneous");
-
-                                                const others = brands.filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc", "Miscellaneous"].includes(p.name));
-                                                const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
-                                                const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
-                                                const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
-
-                                                return (
-                                                    <>
-                                                        <Row className="g-3 mb-4">
-                                                            <Col xs={12} lg={4}>
-                                                                {pinnedStreet && (
-                                                                    <Badge
-                                                                        bg={newModelBrand === pinnedStreet.name ? "primary" : "secondary"}
-                                                                        className={`p-3 border cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center ${newModelBrand === pinnedStreet.name ? 'border-primary' : 'border-dark'}`}
-                                                                        style={{ fontSize: "0.85rem", transition: 'all 0.2s' }}
-                                                                        onClick={() => setNewModelBrand(pinnedStreet.name)}
-                                                                    >
-                                                                        {pinnedStreet.name}
-                                                                    </Badge>
-                                                                )}
-                                                            </Col>
-                                                            <Col xs={12} lg={4}>
-                                                                {pinnedOffroad && (
-                                                                    <Badge
-                                                                        bg={newModelBrand === pinnedOffroad.name ? "primary" : "secondary"}
-                                                                        className={`p-3 border cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center ${newModelBrand === pinnedOffroad.name ? 'border-primary' : 'border-dark'}`}
-                                                                        style={{ fontSize: "0.85rem", transition: 'all 0.2s' }}
-                                                                        onClick={() => setNewModelBrand(pinnedOffroad.name)}
-                                                                    >
-                                                                        {pinnedOffroad.name}
-                                                                    </Badge>
-                                                                )}
-                                                            </Col>
-                                                            <Col xs={12} lg={4}>
-                                                                {pinnedMisc && (
-                                                                    <Badge
-                                                                        bg={newModelBrand === pinnedMisc.name ? "primary" : "secondary"}
-                                                                        className={`p-3 border cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center ${newModelBrand === pinnedMisc.name ? 'border-primary' : 'border-dark'}`}
-                                                                        style={{ fontSize: "0.85rem", transition: 'all 0.2s' }}
-                                                                        onClick={() => setNewModelBrand(pinnedMisc.name)}
-                                                                    >
-                                                                        {pinnedMisc.name}
-                                                                    </Badge>
-                                                                )}
-                                                            </Col>
-                                                        </Row>
-
-                                                        <Row className="g-4">
-                                                            <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                                <div className="text-center mb-1">
-                                                                    <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
-                                                                </div>
-                                                                <div className="d-flex flex-wrap gap-2">
-                                                                    {group1.map(opt => (
-                                                                        <Badge
-                                                                            key={opt.id}
-                                                                            role="button"
-                                                                            bg={newModelBrand === opt.name ? "primary" : "secondary"}
-                                                                            className={`p-2 border cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm ${newModelBrand === opt.name ? 'border-primary' : 'border-dark'}`}
-                                                                            style={{ minWidth: "46%", transition: 'all 0.2s' }}
-                                                                            onClick={() => setNewModelBrand(opt.name)}
-                                                                        >
-                                                                            {opt.name}
-                                                                        </Badge>
-                                                                    ))}
-                                                                </div>
-                                                            </Col>
-                                                            <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                                <div className="text-center mb-1">
-                                                                    <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
-                                                                </div>
-                                                                <div className="d-flex flex-wrap gap-2">
-                                                                    {group2.map(opt => (
-                                                                        <Badge
-                                                                            key={opt.id}
-                                                                            role="button"
-                                                                            bg={newModelBrand === opt.name ? "primary" : "secondary"}
-                                                                            className={`p-2 border cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm ${newModelBrand === opt.name ? 'border-primary' : 'border-dark'}`}
-                                                                            style={{ minWidth: "46%", transition: 'all 0.2s' }}
-                                                                            onClick={() => setNewModelBrand(opt.name)}
-                                                                        >
-                                                                            {opt.name}
-                                                                        </Badge>
-                                                                    ))}
-                                                                </div>
-                                                            </Col>
-                                                            <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                                <div className="text-center mb-1">
-                                                                    <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
-                                                                </div>
-                                                                <div className="d-flex flex-wrap gap-2">
-                                                                    {group3.map(opt => (
-                                                                        <Badge
-                                                                            key={opt.id}
-                                                                            role="button"
-                                                                            bg={newModelBrand === opt.name ? "primary" : "secondary"}
-                                                                            className={`p-2 border cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm ${newModelBrand === opt.name ? 'border-primary' : 'border-dark'}`}
-                                                                            style={{ minWidth: "46%", transition: 'all 0.2s' }}
-                                                                            onClick={() => setNewModelBrand(opt.name)}
-                                                                        >
-                                                                            {opt.name}
-                                                                        </Badge>
-                                                                    ))}
-                                                                </div>
-                                                            </Col>
-                                                        </Row>
-                                                    </>
-                                                );
-                                            })()}
+                            {!selectedModelPlatform ? (
+                                <div className="bg-black p-4 rounded border border-secondary mb-5 shadow-inner">
+                                    <div className="mb-4 pb-4 border-bottom border-secondary">
+                                        <div className="text-center mb-3">
+                                            <span className="text-info fw-bold text-uppercase letter-spacing-1 small">Special Platforms</span>
+                                        </div>
+                                        <div className="d-flex flex-column gap-2 mx-auto" style={{ maxWidth: "400px" }}>
+                                            {specialPlatformsData.map(brand => (
+                                                <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm cursor-pointer hover-bg-dark transition-all" onClick={() => setSelectedModelPlatform(brand.name)}>
+                                                    <span className="small fw-bold text-light ms-2">{brand.name}</span>
+                                                    <Badge bg="none" className="border border-info text-info small">{groupedModels[brand.name]?.length || 0}</Badge>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
 
-                                    {newModelBrand && (
-                                        <div className="mb-2">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-2">2. Enter Model Name *</Form.Label>
+                                    <Row className="g-4">
+                                        <Col md={4}>
+                                            <div className="text-center mb-2">
+                                                <span className="small fw-bold text-muted uppercase letter-spacing-1">0-9 / A - I</span>
+                                            </div>
+                                            <div className="d-flex flex-column gap-2">
+                                                {alphabeticalBrandsData.group1.map(brand => (
+                                                    <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm cursor-pointer hover-bg-dark transition-all" onClick={() => setSelectedModelPlatform(brand.name)}>
+                                                        <span className="small fw-bold text-light ms-2 text-truncate pe-2">{brand.name}</span>
+                                                        <Badge bg="none" className="border border-info text-info small">{groupedModels[brand.name]?.length || 0}</Badge>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </Col>
+                                        <Col md={4}>
+                                            <div className="text-center mb-2">
+                                                <span className="small fw-bold text-muted uppercase letter-spacing-1">J - R</span>
+                                            </div>
+                                            <div className="d-flex flex-column gap-2">
+                                                {alphabeticalBrandsData.group2.map(brand => (
+                                                    <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm cursor-pointer hover-bg-dark transition-all" onClick={() => setSelectedModelPlatform(brand.name)}>
+                                                        <span className="small fw-bold text-light ms-2 text-truncate pe-2">{brand.name}</span>
+                                                        <Badge bg="none" className="border border-info text-info small">{groupedModels[brand.name]?.length || 0}</Badge>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </Col>
+                                        <Col md={4}>
+                                            <div className="text-center mb-2">
+                                                <span className="small fw-bold text-muted uppercase letter-spacing-1">S - Z</span>
+                                            </div>
+                                            <div className="d-flex flex-column gap-2">
+                                                {alphabeticalBrandsData.group3.map(brand => (
+                                                    <div key={brand.id} className="bg-secondary p-2 rounded border border-dark d-flex justify-content-between align-items-center shadow-sm cursor-pointer hover-bg-dark transition-all" onClick={() => setSelectedModelPlatform(brand.name)}>
+                                                        <span className="small fw-bold text-light ms-2 text-truncate pe-2">{brand.name}</span>
+                                                        <Badge bg="none" className="border border-info text-info small">{groupedModels[brand.name]?.length || 0}</Badge>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </Col>
+                                    </Row>
+                                </div>
+                            ) : (
+                                <div className="animate-in slide-in-bottom">
+                                    <div className="mb-5">
+                                        <div className="d-flex align-items-center gap-2 mb-4">
+                                            <div className="bg-info" style={{ width: '4px', height: '24px' }}></div>
+                                            <h4 className="text-white fw-bold mb-0 text-uppercase letter-spacing-1">{selectedModelPlatform} Models</h4>
+                                        </div>
+
+                                        <Row className="g-4 mb-5">
+                                            {(groupedModels[selectedModelPlatform] || []).map((m: any) => (
+                                                <Col key={m.id} xs={12} sm={6} md={4} lg={3}>
+                                                    <div className="bg-black rounded border border-secondary overflow-hidden h-100 d-flex flex-column shadow-sm transition-hover cursor-pointer" onClick={() => {
+                                                        setEditingModelAdmin(m);
+                                                        setEditModelName(m.name);
+                                                        setEditModelDesc(m.description || "");
+                                                        setEditModelImage(m.image_url || null);
+                                                    }}>
+                                                        <div className="bg-dark p-3 d-flex align-items-center justify-content-center" style={{ aspectRatio: '16/9', backgroundColor: '#0a0a0a' }}>
+                                                            {m.image_url && !m.image_url.includes('placehold.co') ? (
+                                                                <img src={m.image_url} alt={m.name} className="img-fluid" style={{ maxHeight: '100%', objectFit: 'contain' }} />
+                                                            ) : (
+                                                                <div className="text-secondary opacity-10 italic fw-black" style={{ fontSize: '40px' }}>{m.name[0]}</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="p-3 border-top border-secondary flex-grow-1">
+                                                            <div className="d-flex justify-content-between align-items-start mb-2">
+                                                                <h6 className="text-white fw-bold text-uppercase mb-0 small" style={{ letterSpacing: '0.05em' }}>{m.name}</h6>
+                                                                {parts.some(p => p.model_id === m.id && p.needs_model_review) && <Badge bg="warning" text="dark" className="small border border-dark">REVIEW</Badge>}
+                                                            </div>
+                                                            <p className="text-muted small mb-0 line-clamp-2" style={{ fontSize: '10px' }}>{m.description || "No registry description provided."}</p>
+                                                        </div>
+                                                        <div className="p-2 bg-dark text-center border-top border-secondary opacity-50 small fw-bold text-info uppercase letter-spacing-1" style={{ fontSize: '9px' }}>
+                                                            Configure Details
+                                                        </div>
+                                                    </div>
+                                                </Col>
+                                            ))}
+                                            {!(groupedModels[selectedModelPlatform] || []).length && (
+                                                <div className="p-5 bg-black bg-opacity-25 rounded border border-dashed border-secondary text-muted small italic w-100 text-center">
+                                                    No hardware models currently registered for this platform.
+                                                </div>
+                                            )}
+                                        </Row>
+
+                                        <div className="p-4 bg-secondary border border-secondary rounded shadow-sm">
+                                            <h6 className="text-info fw-bold mb-3 uppercase letter-spacing-1">Register New Model for {selectedModelPlatform}</h6>
                                             <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
                                                 <Form.Control
                                                     type="text"
                                                     className="input-contrast p-3 border-0 fw-bold"
                                                     value={newModelName}
                                                     onChange={e => setNewModelName(e.target.value)}
-                                                    onKeyDown={e => e.key === 'Enter' && handleAddBoardModel()}
+                                                    onKeyDown={e => e.key === 'Enter' && selectedModelPlatform && handleAddBoardModelWithName(selectedModelPlatform)}
                                                     placeholder="e.g. Hurricane Ninja"
                                                 />
                                                 <Button
                                                     variant="success"
                                                     className="fw-bold px-4 px-md-5 border-0"
-                                                    onClick={handleAddBoardModel}
+                                                    onClick={() => selectedModelPlatform && handleAddBoardModelWithName(selectedModelPlatform)}
                                                     disabled={!newModelName.trim() || isLoading}
                                                 >
                                                     {isLoading ? <Spinner animation="border" size="sm" /> : 'Save Model'}
                                                 </Button>
                                             </InputGroup>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* EXISTING MODELS LIST */}
-                            {!showAddModel && isLoading ? (
-                                <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
-                            ) : !showAddModel && (
-                                <div className="d-flex flex-column gap-4">
-                                    {groupedBoardModels.groups.map(group => (
-                                        <div key={group.brand} className="bg-black p-4 rounded border border-secondary shadow-inner">
-                                            <h6 className="text-white fw-bold uppercase letter-spacing-1 mb-3 opacity-75">{group.brand}</h6>
-                                            <div className="d-flex flex-wrap gap-2">
-                                                {group.models.map((model: any) => (
-                                                    <Badge
-                                                        key={model.id}
-                                                        pill
-                                                        bg={editBoardModelOld === model.name ? "primary" : "secondary"}
-                                                        className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${editBoardModelOld === model.name ? 'border-primary' : 'border-dark'}`}
-                                                        onClick={() => { setEditBoardModelOld(model.name); setEditBoardModelNew(model.name); }}
-                                                    >
-                                                        {model.name}
-                                                        {allActiveParts.some(p => p.model_id === model.id && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    ))}
-
-                                    {groupedBoardModels.orphans.length > 0 && (
-                                        <div className="bg-black p-4 rounded border border-secondary shadow-inner mt-1">
-                                            <h6 className="text-warning fw-bold uppercase letter-spacing-1 mb-3 opacity-75">Uncategorized / No Platform</h6>
-                                            <div className="d-flex flex-wrap gap-2">
-                                                {groupedBoardModels.orphans.map(model => (
-                                                    <Badge
-                                                        key={model}
-                                                        pill
-                                                        bg={editBoardModelOld === model ? "warning" : "secondary"}
-                                                        text={editBoardModelOld === model ? "dark" : "light"}
-                                                        className={`px-3 py-2 d-flex align-items-center gap-2 template-badge cursor-pointer border ${editBoardModelOld === model ? 'border-warning' : 'border-dark'}`}
-                                                        onClick={() => { setEditBoardModelOld(model); setEditBoardModelNew(model); }}
-                                                    >
-                                                        {model}
-                                                        {allActiveParts.some(p => p.board_model === model && p.needs_model_review) && <span title="Needs Review" className="ms-1">🚩</span>}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {models.length === 0 && (
-                                        <div className="bg-black p-5 rounded border border-secondary text-center text-muted small shadow-inner">
-                                            No board models found in the database.
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* EDIT SELECTED MODEL */}
-                            {!showAddModel && editBoardModelOld && (
-                                <div className="mt-4 p-4 bg-secondary border border-secondary rounded shadow-sm">
-                                    <h6 className="text-info fw-bold mb-3">Modify Model Name: <span className="text-white">{editBoardModelOld}</span></h6>
-
-                                    <div className="d-flex flex-column gap-3">
-                                        <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
-                                            <Form.Control
-                                                type="text"
-                                                className="input-contrast p-3 border-0"
-                                                value={editBoardModelNew}
-                                                onChange={e => setEditBoardModelNew(e.target.value)}
-                                                onKeyDown={e => e.key === 'Enter' && handleUpdateBoardModel()}
-                                                placeholder="Clear this text to remove model from all parts"
-                                            />
-                                            <Button
-                                                variant="success"
-                                                className="fw-bold px-4 border-0"
-                                                onClick={handleUpdateBoardModel}
-                                                disabled={editBoardModelNew === editBoardModelOld || isLoading}
-                                            >
-                                                {isLoading ? <Spinner animation="border" size="sm" /> : 'Apply to All Parts'}
-                                            </Button>
-                                        </InputGroup>
-                                        <div className="d-flex justify-content-between">
-                                            <Button variant="secondary" size="sm" className="fw-bold" onClick={() => { setEditBoardModelOld(""); setEditBoardModelNew(""); }}>Cancel Edit</Button>
                                         </div>
                                     </div>
                                 </div>
@@ -1416,40 +1536,19 @@ export default function AdminPage(props: PageProps) {
                         </div>
                     </Tab>
 
-                    {/* 8. Hidden */}
-                    <Tab eventKey="hidden" title={`8. Hidden (${hiddenParts.length})`}>
-                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <div className="d-flex justify-content-between align-items-center mb-3">
-                                <h5 className="text-info fw-bold mb-0">Hidden Vault</h5>
-                            </div>
-                            <p className="text-muted small mb-4">These parts are soft-hidden via the <code className="text-white">is_hidden</code> flag and do not appear on the public site.</p>
 
+                    {/* 8. Hidden */}
+                    <Tab eventKey="hidden" title={`8. Hidden (${trulyHiddenParts.length})`}>
+                        <div className="mt-4">
                             {isHiddenLoading ? (
-                                <Row>
-                                    {[1, 2, 3, 4].map(i => (
-                                        <Col key={`skel-${i}`} xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4">
-                                            <Card className="h-100 shadow-sm border-secondary bg-black" style={{ minHeight: '300px' }}>
-                                                <div className="card-img-holder placeholder-glow bg-secondary" style={{ aspectRatio: "16 / 9", opacity: 0.1 }}>
-                                                    <div className="placeholder w-100 h-100"></div>
-                                                </div>
-                                                <Card.Body className="d-flex flex-column gap-2 p-3">
-                                                    <div className="placeholder-glow"><span className="placeholder col-8 bg-secondary"></span></div>
-                                                    <div className="placeholder-glow"><span className="placeholder col-4 bg-secondary"></span></div>
-                                                    <div className="mt-auto pt-3 placeholder-glow d-flex gap-2">
-                                                        <span className="placeholder col-12 bg-secondary py-3 rounded"></span>
-                                                    </div>
-                                                </Card.Body>
-                                            </Card>
-                                        </Col>
-                                    ))}
-                                </Row>
-                            ) : hiddenParts.length === 0 ? (
+                                <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
+                            ) : trulyHiddenParts.length === 0 ? (
                                 <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    No hidden parts found.
+                                    No hidden assets found.
                                 </div>
                             ) : (
-                                <Row>
-                                    {hiddenParts.map(part => (
+                                <Row className="g-4">
+                                    {trulyHiddenParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
                                             <>
                                                 <Button variant="outline-success" size="sm" className="w-50 fw-bold" onClick={() => handleRestorePart(part.id!, 'hidden')} disabled={actionLoadingId === part.id}>
@@ -1468,42 +1567,23 @@ export default function AdminPage(props: PageProps) {
 
                     {/* 9. Recently Deleted */}
                     <Tab eventKey="deleted" title={`9. Recently Deleted (${deletedParts.length})`}>
-                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
-                            <div className="d-flex justify-content-between align-items-center mb-3">
-                                <h5 className="text-danger fw-bold mb-0">Trash Bin</h5>
-                            </div>
-                            <p className="text-muted small mb-4">These parts are soft-deleted and will be permanently removed eventually.</p>
-
+                        <div className="mt-4">
                             {isDeletedLoading ? (
-                                <Row>
-                                    {[1, 2, 3, 4].map(i => (
-                                        <Col key={`skel-del-${i}`} xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4">
-                                            <Card className="h-100 shadow-sm border-secondary bg-black" style={{ minHeight: '300px' }}>
-                                                <div className="card-img-holder placeholder-glow bg-secondary" style={{ aspectRatio: "16 / 9", opacity: 0.1 }}>
-                                                    <div className="placeholder w-100 h-100"></div>
-                                                </div>
-                                                <Card.Body className="d-flex flex-column gap-2 p-3">
-                                                    <div className="placeholder-glow"><span className="placeholder col-8 bg-secondary"></span></div>
-                                                    <div className="placeholder-glow"><span className="placeholder col-4 bg-secondary"></span></div>
-                                                </Card.Body>
-                                            </Card>
-                                        </Col>
-                                    ))}
-                                </Row>
+                                <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
                             ) : deletedParts.length === 0 ? (
                                 <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    No deleted parts found.
+                                    Trash bin is empty.
                                 </div>
                             ) : (
-                                <Row>
+                                <Row className="g-4">
                                     {deletedParts.map(part => (
                                         <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
                                             <>
                                                 <Button variant="outline-success" size="sm" className="w-50 fw-bold" onClick={() => handleRestorePart(part.id!, 'deleted')} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Restore'}
+                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Recover'}
                                                 </Button>
                                                 <Button variant="danger" size="sm" className="w-50 fw-bold" onClick={() => handlePermDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Perm Delete'}
+                                                    {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Purge'}
                                                 </Button>
                                             </>
                                         } />
@@ -1516,45 +1596,27 @@ export default function AdminPage(props: PageProps) {
                 </Tabs>
 
                 {editingPart && (
-                    <Modal show={true} onHide={() => setEditingPart(null)} size="lg" data-bs-theme="dark" backdrop="static">
+                    <Modal show={true} onHide={() => setEditingPart(null)} size="lg" data-bs-theme="dark" backdrop="static" centered>
                         <Modal.Header closeButton className="bg-dark border-secondary text-light">
                             <Modal.Title className="fw-bold d-flex align-items-center gap-2">
                                 Edit Part <Badge bg="primary">#{editingPart.id?.toString().substring(0, 5)}</Badge>
                             </Modal.Title>
                         </Modal.Header>
                         <Modal.Body className="bg-dark text-light border-0 px-4 py-4">
-                            {/* Image Preview - Absolute Top */}
+                            {/* Image Preview */}
                             {(() => {
                                 const imgSrc = Array.isArray(editingPart.image_src) ? editingPart.image_src[0] : editingPart.image_src;
                                 return (
                                     <div className="mb-4 bg-black rounded border border-secondary position-relative shadow-inner overflow-hidden d-flex justify-content-center align-items-center" style={{ width: '100%', minHeight: imgSrc ? '250px' : '150px' }}>
                                         {imgSrc ? (
-                                            <>
-                                                <img
-                                                    src={imgSrc}
-                                                    alt="Preview"
-                                                    className="w-100 h-100 p-2"
-                                                    style={{ objectFit: 'contain', maxHeight: '350px', position: 'absolute', top: 0, left: 0 }}
-                                                    onError={(e) => {
-                                                        e.currentTarget.style.display = 'none';
-                                                        const fb = e.currentTarget.parentElement?.querySelector('.fallback-img');
-                                                        if (fb) fb.classList.remove('d-none');
-                                                    }}
-                                                />
-                                                <div className="fallback-img d-none position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted small">
-                                                    <div className="placeholder-glow w-100 d-flex justify-content-center mb-2">
-                                                        <div className="placeholder bg-secondary rounded" style={{ width: "100px", height: "80px", opacity: 0.2 }}></div>
-                                                    </div>
-                                                    Broken Image URL
-                                                </div>
-                                            </>
+                                            <img
+                                                src={imgSrc}
+                                                alt="Preview"
+                                                className="w-100 h-100 p-2"
+                                                style={{ objectFit: 'contain', maxHeight: '350px' }}
+                                            />
                                         ) : (
-                                            <div className="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center text-muted small">
-                                                <div className="placeholder-glow w-100 d-flex justify-content-center mb-2">
-                                                    <div className="placeholder bg-secondary rounded" style={{ width: "100px", height: "80px", opacity: 0.2 }}></div>
-                                                </div>
-                                                No Image Available
-                                            </div>
+                                            <div className="text-muted small">No Image Available</div>
                                         )}
                                     </div>
                                 );
@@ -1571,7 +1633,7 @@ export default function AdminPage(props: PageProps) {
                             </Form.Group>
 
                             <Form.Group className="mb-4">
-                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Project Link (cad_link) *</Form.Label>
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Project Link (Universal URL) *</Form.Label>
                                 <Form.Control type="text" value={editingPart.external_url || ''} onChange={e => setEditingPart({ ...editingPart, external_url: e.target.value })} className="bg-black text-white border-secondary p-3 shadow-sm" />
                             </Form.Group>
 
@@ -1595,206 +1657,162 @@ export default function AdminPage(props: PageProps) {
                                 </Col>
                             </Row>
 
-                            {(() => {
-                                const pinnedStreet = brands.find(p => p.name === "Street (DIY/Generic)");
-                                const pinnedOffroad = brands.find(p => p.name === "Off-Road (DIY/Generic)");
-                                const pinnedMisc = brands.find(p => p.name === "Misc" || p.name === "Miscellaneous");
-
-                                const others = brands.filter(p => p.name !== "Street (DIY/Generic)" && p.name !== "Off-Road (DIY/Generic)" && p.name !== "Misc" && p.name !== "Miscellaneous");
-                                const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
-                                const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
-                                const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
-
-                                return (
-                                    <>
-                                        <Form.Group className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-3">Manufacturer (Platform) *</Form.Label>
-                                            <div className="bg-black p-4 rounded border border-secondary shadow-inner">
-                                                <Row className="g-3 mb-4">
-                                                    <Col xs={12} lg={4}>
-                                                        {pinnedStreet && (
-                                                            <Badge
-                                                                bg={editingPart.platform_id === pinnedStreet.id ? "primary" : "none"}
-                                                                className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                                style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => setEditingPart({ ...editingPart, platform_id: pinnedStreet.id })}
-                                                            >
-                                                                {pinnedStreet.name}
-                                                            </Badge>
-                                                        )}
-                                                    </Col>
-                                                    <Col xs={12} lg={4}>
-                                                        {pinnedOffroad && (
-                                                            <Badge
-                                                                bg={editingPart.platform_id === pinnedOffroad.id ? "primary" : "none"}
-                                                                className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                                style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => setEditingPart({ ...editingPart, platform_id: pinnedOffroad.id })}
-                                                            >
-                                                                {pinnedOffroad.name}
-                                                            </Badge>
-                                                        )}
-                                                    </Col>
-                                                    <Col xs={12} lg={4}>
-                                                        {pinnedMisc && (
-                                                            <Badge
-                                                                bg={editingPart.platform_id === pinnedMisc.id ? "primary" : "none"}
-                                                                className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                                style={{ fontSize: "0.85rem" }}
-                                                                onClick={() => setEditingPart({ ...editingPart, platform_id: pinnedMisc.id })}
-                                                            >
-                                                                {pinnedMisc.name}
-                                                            </Badge>
-                                                        )}
-                                                    </Col>
-                                                </Row>
-
-                                                <h3 className="h6 fw-bold text-light mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2 text-center">Brands</h3>
-
-                                                <Row className="g-4">
-                                                    <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                        <div className="text-center mb-1">
-                                                            <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
-                                                        </div>
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                            {group1.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform_id === opt.id ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => setEditingPart({ ...editingPart, platform_id: opt.id })}>
-                                                                    {opt.name}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </Col>
-                                                    <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                        <div className="text-center mb-1">
-                                                            <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
-                                                        </div>
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                            {group2.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform_id === opt.id ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => setEditingPart({ ...editingPart, platform_id: opt.id })}>
-                                                                    {opt.name}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </Col>
-                                                    <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                                        <div className="text-center mb-1">
-                                                            <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
-                                                        </div>
-                                                        <div className="d-flex flex-wrap gap-2">
-                                                            {group3.map(opt => (
-                                                                <Badge key={opt.id} role="button" bg={editingPart.platform_id === opt.id ? "primary" : "none"} className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm" style={{ minWidth: "46%" }} onClick={() => setEditingPart({ ...editingPart, platform_id: opt.id })}>
-                                                                    {opt.name}
-                                                                </Badge>
-                                                            ))}
-                                                        </div>
-                                                    </Col>
-                                                </Row>
-                                            </div>
-                                        </Form.Group>
-
-                                        <Form.Group className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Part Category *</Form.Label>
-                                            <div className="d-flex flex-wrap gap-2 p-4 bg-black rounded border border-secondary shadow-inner">
-                                                {partCategories.map(c => {
-                                                    const isSelected = editingPart.category_id === c.id;
-                                                    return (
-                                                        <Badge
-                                                            key={c.id}
-                                                            role="button"
-                                                            bg={isSelected ? "primary" : "none"}
-                                                            className="border border-light p-2 cursor-pointer shadow-sm text-wrap lh-sm"
-                                                            onClick={() => setEditingPart({ ...editingPart, category_id: c.id })}
-                                                        >
-                                                            {c.name}
-                                                        </Badge>
-                                                    );
-                                                })}
-                                            </div>
-                                        </Form.Group>
-
-                                        <Form.Group className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Fabrication Method *</Form.Label>
-                                            <div className="d-flex flex-wrap gap-2 p-4 bg-black rounded border border-secondary shadow-inner">
-                                                {fabricationMethods.map(c => {
-                                                    const isSelected = editingPart.fabrication_method_id === c.id;
-                                                    return (
-                                                        <Badge
-                                                            key={c.id}
-                                                            role="button"
-                                                            bg={isSelected ? "primary" : "none"}
-                                                            className="border border-light p-2 cursor-pointer shadow-sm text-wrap lh-sm"
-                                                            onClick={() => setEditingPart({ ...editingPart, fabrication_method_id: c.id })}
-                                                        >
-                                                            {c.name}
-                                                        </Badge>
-                                                    );
-                                                })}
-                                            </div>
-                                        </Form.Group>
-
-                                        {/* Tags Summary Pills Section */}
-                                        <div className="mb-4">
-                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Selection Summary (Tags)</Form.Label>
-                                            <div className="mt-2 p-3 rounded-pill bg-black border border-secondary d-flex align-items-center justify-content-center gap-2 flex-wrap shadow-inner" style={{ minHeight: '52px' }}>
-                                                {editingPart.platform_id && (
-                                                    <Badge pill bg="dark" className="border border-info text-info py-2 px-3">
-                                                        {brands.find(b => b.id === editingPart.platform_id)?.name || "Unknown Platform"}
-                                                    </Badge>
-                                                )}
-                                                {editingPart.category_id && (
-                                                    <Badge pill bg="dark" className="border border-info text-info py-2 px-3">
-                                                        {partCategories.find(c => c.id === editingPart.category_id)?.name || "Unknown Category"}
-                                                    </Badge>
-                                                )}
-                                                {editingPart.fabrication_method_id && (
-                                                    <Badge pill bg="dark" className="border border-info text-info py-2 px-3">
-                                                        {fabricationMethods.find(f => f.id === editingPart.fabrication_method_id)?.name || "Unknown Method"}
-                                                    </Badge>
-                                                )}
-                                                {editingPart.is_oem && (
-                                                    <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-2 px-3">OEM</Badge>
-                                                )}
-                                                {((editingPart as any).models?.name || editingPart.model_id) && (
-                                                    <Badge pill bg="warning" text="dark" className="border border-warning py-2 px-3">
-                                                        {(editingPart as any).models?.name || (models.find(m => m.id === editingPart.model_id)?.name) || editingPart.model_id}
-                                                    </Badge>
-                                                )}
-                                                {!editingPart.model_id && !(editingPart as any).models?.name && editingPart.board_model && (
-                                                    <Badge pill bg="secondary" text="light" className="border border-dark py-2 px-3">
-                                                        {editingPart.board_model}
-                                                    </Badge>
-                                                )}
-                                                {!editingPart.platform_id && !editingPart.category_id && !editingPart.fabrication_method_id && !editingPart.is_oem && !editingPart.model_id && !editingPart.board_model && (
-                                                    <span className="small text-muted opacity-50 italic">No tags selected yet...</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </>
-                                );
-                            })()}
-
-                            <Row className="mb-4">
-                                <Col md={12} className="d-flex align-items-center">
-                                    <Form.Check type="checkbox" id="edit-oem" label="OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-1" />
-                                </Col>
-                            </Row>
-
-                            <HardwareFields
-                                brandId={editingPart.platform_id || null}
-                                modelId={editingPart.model_id || editingPart.board_model || null}
-                                needsModelReview={editingPart.needs_model_review || false}
-                                onChangeModel={(m) => setEditingPart(prev => prev ? { ...prev, model_id: m } : null)}
-                                onChangeNeedsReview={(b) => setEditingPart(prev => prev ? { ...prev, needs_model_review: b } : null)}
-                            />
+                            <div className="pt-4 border-t border-secondary mt-2">
+                                <div className="mb-4">
+                                    <label className="small uppercase fw-bold opacity-75 text-light mb-2">Platform, Category & Method</label>
+                                    <Row className="g-3">
+                                        <Col md={4}>
+                                            <Form.Select className="bg-black text-white border-secondary p-3" value={editingPart.platform_id || ''} onChange={e => setEditingPart({ ...editingPart, platform_id: e.target.value })}>
+                                                <option value="">Select Platform...</option>
+                                                {brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                            </Form.Select>
+                                        </Col>
+                                        <Col md={4}>
+                                            <Form.Select className="bg-black text-white border-secondary p-3" value={editingPart.category_id || ''} onChange={e => setEditingPart({ ...editingPart, category_id: e.target.value })}>
+                                                <option value="">Select Category...</option>
+                                                {partCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </Form.Select>
+                                        </Col>
+                                        <Col md={4}>
+                                            <Form.Select className="bg-black text-white border-secondary p-3" value={editingPart.fabrication_method_id || ''} onChange={e => setEditingPart({ ...editingPart, fabrication_method_id: e.target.value })}>
+                                                <option value="">Select Method...</option>
+                                                {fabricationMethods.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                                            </Form.Select>
+                                        </Col>
+                                    </Row>
+                                </div>
+                                <HardwareFields
+                                    brandId={editingPart.platform_id || null}
+                                    modelId={editingPart.model_id || editingPart.board_model || null}
+                                    needsModelReview={editingPart.needs_model_review || false}
+                                    onChangeModel={(m) => setEditingPart(prev => prev ? { ...prev, model_id: m } : null)}
+                                    onChangeNeedsReview={(b) => setEditingPart(prev => prev ? { ...prev, needs_model_review: b } : null)}
+                                />
+                                <Form.Check type="checkbox" id="edit-oem-check" label="OFFICIAL OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-3" />
+                            </div>
                         </Modal.Body>
                         <Modal.Footer className="bg-dark border-secondary p-4">
                             <Button variant="secondary" onClick={() => setEditingPart(null)} className="px-4">Cancel</Button>
                             <Button variant="success" className="px-5 fw-bold shadow-lg" onClick={handleSaveEdit} disabled={isSavingEdit}>
-                                {isSavingEdit ? <><Spinner size="sm" animation="border" className="me-2" /> Saving...</> : "Publish Changes"}
+                                {isSavingEdit ? <Spinner size="sm" animation="border" className="me-2" /> : "Publish Changes"}
                             </Button>
                         </Modal.Footer>
                     </Modal>
                 )}
+
+                {/* BRAND EDIT MODAL */}
+                <Modal show={!!editingBrandAdmin} onHide={() => setEditingBrandAdmin(null)} size="lg" centered>
+                    <Modal.Header closeButton closeVariant="dark" className="bg-white border-bottom shadow-sm">
+                        <Modal.Title className="fw-bold text-uppercase h6 letter-spacing-1 text-dark">Brand Overview Settings</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body className="bg-white p-4">
+                        <Row className="g-4">
+                            <Col md={6}>
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="small fw-bold text-secondary text-uppercase">Brand Title</Form.Label>
+                                    <Form.Control type="text" className="bg-light text-dark border-secondary border-opacity-25 p-3 fw-bold" value={editBrandName} onChange={e => setEditBrandName(e.target.value)} />
+                                </Form.Group>
+                                <Form.Group className="mb-3">
+                                    <Form.Label className="small fw-bold text-secondary text-uppercase">Overview Information</Form.Label>
+                                    <Form.Control as="textarea" rows={5} className="bg-light text-dark border-secondary border-opacity-25 p-3" value={editBrandOverview} onChange={e => setEditBrandOverview(e.target.value)} placeholder="Default text displayed on brand pages..." />
+                                </Form.Group>
+                                <Form.Group className="mb-4">
+                                    <Form.Label className="small fw-bold text-muted uppercase">Brand Image (Banner/Overview)</Form.Label>
+                                    <Form.Control type="file" className="bg-light border-0" onChange={(e: any) => e.target.files[0] && editingBrandAdmin?.id && handleImageUpload('brands', editingBrandAdmin.id, e.target.files[0])} disabled={isActionLoading} />
+                                    {isActionLoading && <div className="mt-2 small text-info"><Spinner animation="border" size="sm" className="me-2" /> Syncing to persistent storage...</div>}
+                                </Form.Group>
+                                <div className="d-flex gap-2">
+                                    <Button variant="dark" className="w-100 fw-bold py-3" onClick={handleUpdateBrandAdvanced} disabled={isBrandSaving}>
+                                        {isBrandSaving ? <Spinner animation="border" size="sm" /> : 'Apply Brand Sync'}
+                                    </Button>
+                                    <Button variant="outline-danger" className="fw-bold" onClick={() => {
+                                        if (window.confirm(`Permanently delete ${editingBrandAdmin?.name}?`)) {
+                                            handleConfirmDeletePlatform();
+                                            setEditingBrandAdmin(null);
+                                        }
+                                    }}>Delete</Button>
+                                </div>
+                            </Col>
+                            <Col md={6}>
+                                <div className="d-flex flex-column h-100 p-4 rounded-4 shadow-inner" style={{ backgroundColor: '#0B0E14', border: '1px solid #1a1e24' }}>
+                                    <span className="small fw-bold text-info uppercase mb-3 opacity-75" style={{ letterSpacing: '0.1em' }}>Live Brand Header Sync</span>
+                                    <div className="flex-grow-1 bg-dark rounded-4 border border-secondary border-opacity-20 p-4 d-flex flex-column align-items-center justify-content-center text-center shadow-lg">
+                                        <div className="bg-black rounded-3 overflow-hidden mb-4 shadow-sm d-flex align-items-center justify-content-center" style={{ width: '100%', height: '140px', border: '1px solid #24282d' }}>
+                                            {editBrandImage ? (<img src={editBrandImage} alt="Logo" className="img-fluid h-100 w-100" style={{ objectFit: 'contain', padding: '1rem' }} />) : (<div className="h4 text-secondary mb-0 opacity-25 italic font-black">BRAND_BANNER</div>)}
+                                        </div>
+                                        <h4 className="fw-black text-white text-uppercase italic mb-1" style={{ fontSize: '1.5rem', letterSpacing: '-0.02em' }}>{editBrandName || "Brand Name"}</h4>
+                                        <div className="text-info small fw-bold text-uppercase mb-3" style={{ fontSize: '10px', letterSpacing: '0.2em' }}>Hardware Repository</div>
+                                        <p className="small text-light font-monospace mb-0" style={{ maxHeight: '120px', overflowY: 'auto', lineHeight: '1.6', opacity: 0.8, whiteSpace: 'pre-wrap' }}>{editBrandOverview || "Awaiting administrative documentation sync..."}</p>
+                                    </div>
+                                </div>
+                            </Col>
+                        </Row>
+                    </Modal.Body>
+                </Modal>
+
+                {/* MODEL EDIT MODAL */}
+                <Modal show={!!editingModelAdmin} onHide={() => setEditingModelAdmin(null)} size="xl" centered>
+                    <Modal.Header closeButton closeVariant="dark" className="bg-white border-bottom shadow-sm">
+                        <Modal.Title className="fw-bold text-uppercase h6 letter-spacing-1 text-dark">Board Model Configuration</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body className="bg-light p-0">
+                        <Row className="g-0">
+                            {/* Editor Panel */}
+                            <Col lg={4} className="p-4 p-md-5 bg-white shadow-sm" style={{ zIndex: 1 }}>
+                                <div className="d-flex align-items-center gap-2 mb-4">
+                                    <div className="bg-info" style={{ width: '4px', height: '20px', borderRadius: '2px' }}></div>
+                                    <h6 className="text-dark fw-bold text-uppercase small letter-spacing-1 mb-0">Registry Data Entry</h6>
+                                </div>
+                                <Form.Group className="mb-4">
+                                    <Form.Label className="small fw-bold text-secondary text-uppercase mb-2">Model Designation</Form.Label>
+                                    <Form.Control type="text" className="bg-light text-dark border-secondary border-opacity-25 p-3 h5 fw-bold font-monospace mb-0" style={{ borderRadius: '12px' }} value={editModelName} onChange={e => setEditModelName(e.target.value)} />
+                                </Form.Group>
+                                <Form.Group className="mb-4">
+                                    <Form.Label className="small fw-bold text-secondary text-uppercase mb-2">Technical Readout (Description)</Form.Label>
+                                    <Form.Control as="textarea" rows={6} className="bg-light text-dark border-secondary border-opacity-25 p-3 small" style={{ borderRadius: '12px', resize: 'none' }} value={editModelDesc} onChange={e => setEditModelDesc(e.target.value)} />
+                                </Form.Group>
+                                <Form.Group className="mb-5">
+                                    <Form.Label className="small fw-bold text-muted uppercase mb-2">Model Image Assets</Form.Label>
+                                    <Form.Control type="file" className="bg-light border-0" onChange={(e: any) => e.target.files[0] && editingModelAdmin?.id && handleImageUpload('models', editingModelAdmin.id, e.target.files[0])} disabled={isActionLoading} />
+                                    {isActionLoading && <div className="mt-2 small text-info d-flex align-items-center gap-2"><Spinner animation="border" size="sm" /> <span>Syncing to persistent storage...</span></div>}
+                                </Form.Group>
+                                <Button variant="info" className="w-100 fw-bold py-3 uppercase shadow-lg text-white" style={{ borderRadius: '14px', letterSpacing: '0.05em' }} onClick={handleUpdateModelAdvanced} disabled={isModelSaving}>
+                                    {isModelSaving ? <Spinner animation="border" size="sm" /> : 'Apply Changes To Registry'}
+                                </Button>
+                            </Col>
+
+                            {/* Live Preview Panel (Simplified Model Card) */}
+                            <Col lg={8} className="p-4 p-md-5 d-flex align-items-center justify-content-center" style={{ background: '#0B0E14', minHeight: '600px' }}>
+                                <div className="w-100" style={{ maxWidth: '850px' }}>
+                                    {/* The Featured Model Card - Focused Preview */}
+                                    <Card className="featured-model-card border-0 p-4 shadow-lg">
+                                        <Row className="align-items-center g-4">
+                                            <Col md={7}>
+                                                <div className="bg-black rounded-4 border border-secondary border-opacity-50 p-2 d-flex align-items-center justify-content-center shadow-sm overflow-hidden" style={{ aspectRatio: '1/1' }}>
+                                                    {editModelImage && !editModelImage.includes('No+Image') ? (
+                                                        <img src={editModelImage} alt="Model" className="img-fluid w-100" style={{ maxHeight: '100%', objectFit: 'contain' }} />
+                                                    ) : (
+                                                        <div className="display-1 text-secondary opacity-10 italic fw-black text-center">X</div>
+                                                    )}
+                                                </div>
+                                            </Col>
+                                            <Col md={5}>
+                                                <h2 className="text-white fw-black text-uppercase italic mb-4" style={{ fontSize: '2.2rem', letterSpacing: '-0.02em', lineHeight: '1.2' }}>{editModelName || "MODEL_NAME"}</h2>
+                                                <div>
+                                                    <div className="text-info text-uppercase fw-bold small text-tracking-widest mb-3" style={{ fontSize: '11px', opacity: 0.8 }}>Tech Readout</div>
+                                                    <p className="text-white font-monospace mb-0" style={{ lineHeight: '1.6', fontSize: '14px', whiteSpace: 'pre-wrap', opacity: 0.9 }}>
+                                                        {editModelDesc?.trim() || "Awaiting entry..."}
+                                                    </p>
+                                                </div>
+                                            </Col>
+                                        </Row>
+                                    </Card>
+                                </div>
+                            </Col>
+
+                        </Row>
+                    </Modal.Body>
+                </Modal>
             </Container>
             <SiteFooter />
         </div>
