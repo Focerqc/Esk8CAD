@@ -1,36 +1,3 @@
-import 'bootstrap/dist/css/bootstrap.min.css';
-const GlobalStyles = () => (
-    <>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
-        <style dangerouslySetInnerHTML={{
-            __html: `
-            .bg-secondary { background-color: #121417 !important; }
-            .border-secondary { border-color: #24282d !important; }
-            .input-contrast { background-color: #0b0e14 !important; border: 1px solid #24282d !important; color: #fff !important; }
-            .input-contrast:focus { background-color: #0b0e14 !important; color: #fff !important; border-color: #0dcaf0 !important; box-shadow: 0 0 0 0.25rem rgba(13, 202, 240, 0.25) !important; }
-            .input-contrast::placeholder { color: rgba(255, 255, 255, 0.25) !important; }
-            .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2) !important; }
-            .uppercase { text-transform: uppercase; }
-            .letter-spacing-1 { letter-spacing: 1px; }
-            .cursor-pointer { cursor: pointer; }
-            
-            /* Taxonomy Button Contrast Fix */
-            .taxonomy-btn { background: #0b0e14 !important; border: 1px solid #24282d !important; color: #dee2e6 !important; font-weight: 800 !important; text-transform: uppercase !important; font-size: 0.8rem !important; padding: 0.75rem 1.25rem !important; letter-spacing: 0.05em !important; }
-            .taxonomy-btn:hover { border-color: #0dcaf0 !important; color: #fff !important; }
-            .taxonomy-btn.active { background: #0dcaf0 !important; border-color: #0dcaf0 !important; color: #000 !important; }
-            
-            /* Fix invisible autofill in some browsers */
-            input:-webkit-autofill,
-            input:-webkit-autofill:hover, 
-            input:-webkit-autofill:focus {
-              -webkit-text-fill-color: #fff !important;
-              -webkit-box-shadow: 0 0 0px 1000px #0b0e14 inset !important;
-              transition: background-color 5000s ease-in-out 0s;
-            }
-        ` }} />
-    </>
-);
-import { type PageProps } from "gatsby"
 import React, { useState, useEffect } from "react"
 import { Container, Button, Form, Alert, Spinner, Image, Card, Row, Col, Badge, InputGroup } from "react-bootstrap"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
@@ -38,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import SiteFooter from "../components/SiteFooter"
 import SiteNavbar from "../components/SiteNavbar"
+import SiteMetaData from "../components/SiteMetaData"
 import ClientOnly from "../components/ClientOnly"
 import HardwareFields from "../components/Forms/HardwareFields"
 import { useBrandHardware } from "../hooks/useBrandHardware"
@@ -592,7 +560,7 @@ const PartFormItem = ({
 }
 
 // --- Main Component: SubmitPage ---
-const SubmitPage: React.FC<PageProps> = () => {
+const SubmitPage: React.FC = () => {
     const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle')
     const [message, setMessage] = useState<string>('')
 
@@ -782,11 +750,42 @@ const SubmitPage: React.FC<PageProps> = () => {
     return (
         <AppErrorBoundary>
             <div className="bg-black text-light min-vh-100 pb-5 mb-5">
-                <GlobalStyles />
+                <style dangerouslySetInnerHTML={{
+                    __html: `
+                    .part-form-card { background: #121417 !important; border: 1px solid #24282d !important; border-radius: 12px !important; overflow: hidden; }
+                    .part-form-card .card-header { background: #1a1d20 !important; border-bottom: 1px solid #24282d !important; }
+                    .input-contrast { 
+                        background-color: #0b0e14 !important; 
+                        border: 1px solid #24282d !important; 
+                        color: #fff !important; 
+                        border-radius: 8px !important;
+                        transition: all 0.2s ease;
+                    }
+                    .input-contrast:focus {
+                        background-color: #000 !important;
+                        border-color: #00e5ff !important;
+                        box-shadow: 0 0 0 0.25rem rgba(0, 229, 255, 0.1) !important;
+                        color: #fff !important;
+                    }
+                    .input-contrast::placeholder { color: rgba(255,255,255,0.2) !important; }
+                    
+                    /* Force white text on form labels */
+                    .form-label { color: #f8f9fa !important; }
+                    .text-light { color: #f8f9fa !important; }
+                    .text-primary { color: #00e5ff !important; }
+                    
+                    .letter-spacing-1 { letter-spacing: 0.1em; }
+                    .uppercase { text-transform: uppercase; }
+                    .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.5) !important; }
+                    .border-dashed { border-style: dashed !important; border-width: 2px !important; border-color: #24282d !important; }
+                    .border-dashed:hover { border-color: #00e5ff !important; background: rgba(0,229,255,0.02) !important; }
+                `}} />
+                <SiteMetaData title="ESK8CAD/Submit" />
                 <SiteNavbar />
                 <Container className="py-5" style={{ maxWidth: '900px' }}>
                     <header className="text-center mb-5">
                         <h1 className="display-4 fw-bold">Submit Parts</h1>
+                        <p className="small text-info uppercase letter-spacing-1 opacity-50 mb-4">Community Contribution Portal</p>
                         <p className="text-light opacity-50">Contribute CAD models to our catalog. Batch up to 10 parts at once.</p>
                     </header>
 

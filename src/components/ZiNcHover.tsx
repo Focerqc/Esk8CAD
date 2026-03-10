@@ -10,11 +10,11 @@ export default () => (
         placement="left"
         overlay={
             <Tooltip>
-                Made by ZiNc
+                Esk8CAD / Quinn
             </Tooltip>
         }>
         <p className="floating-icon">
-            Zn
+            EQ
         </p>
     </OverlayTrigger>
 )

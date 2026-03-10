@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Badge, Card, Col } from "react-bootstrap";
-import { Link } from "gatsby";
+import { Link } from "react-router-dom";
 
 export interface PartSchema {
     id: string;

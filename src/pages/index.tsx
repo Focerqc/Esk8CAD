@@ -1,4 +1,3 @@
-import { type PageProps } from "gatsby"
 import React from "react"
 import { Container, Row, Col, Button } from "react-bootstrap"
 import TechnicalTagsLinks from "../components/TechnicalTagsLinks"
@@ -9,49 +8,13 @@ import ClientOnly from "../components/ClientOnly"
 import { getSupabaseClient, Brand } from "../lib/supabase"
 import { useState, useEffect } from "react"
 
-const platformsRaw = [
-    { label: "Street (DIY/Generic)", href: "/street" },
-    { label: "Off-Road (DIY/Generic)", href: "/offroad" },
-    { label: "Misc", href: "/misc" },
-    { label: "3D Servisas", href: "/3dservisas" },
-    { label: "Acedeck", href: "/acedeck" },
-    { label: "Apex Boards", href: "/apex" },
-    { label: "Backfire", href: "/backfire" },
-    { label: "Bioboards", href: "/bioboards" },
-    { label: "Boardnamics", href: "/boardnamics" },
-    { label: "Defiant Board Society", href: "/defiant" },
-    { label: "Evolve", href: "/evolve" },
-    { label: "Exway", href: "/exway" },
-    { label: "Fluxmotion", href: "/fluxmotion" },
-    { label: "Hoyt St", href: "/hoyt" },
-    { label: "Lacroix Boards", href: "/lacroix" },
-    { label: "Linnpower", href: "/linnpower" },
-    { label: "MBoards", href: "/mboards" },
-    { label: "MBS", href: "/mbs" },
-    { label: "Meepo", href: "/meepo" },
-    { label: "Newbee", href: "/newbee" },
-    { label: "Propel", href: "/propel" },
-    { label: "Radium Performance", href: "/radium" },
-    { label: "Stooge Raceboards", href: "/stooge" },
-    { label: "Summerboard", href: "/summerboard" },
-    { label: "Trampa Boards", href: "/trampa" },
-    { label: "Wowgo", href: "/wowgo" }
-];
-
 import { useBoardHook } from "../hooks/useBoardHook"
 
-const Page: React.FC<PageProps> = () => {
+const Page: React.FC = () => {
     const { special, groupedBrands, loading } = useBoardHook();
 
     const getPlatformHref = (brand: Brand) => {
-        const raw = platformsRaw.find(p => p.label === brand.name);
-        if (raw) return raw.href;
-
-        const slug = brand.slug || brand.safe_slug || (brand as any).slug;
-        if (slug) return `/brand/${slug}`;
-
-        // Fallback catch-all if no slug
-        return `/brand/${brand.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        return `/parts?brand=${encodeURIComponent(brand.name)}`;
     };
 
     const pinnedStreet = special.find(p => p.name === "Street (DIY/Generic)");
@@ -69,7 +32,7 @@ const Page: React.FC<PageProps> = () => {
 
     return (
         <div className="bg-black text-light min-vh-100 pb-5">
-            <SiteMetaData title="Home | ESK8CAD.COM" />
+            <SiteMetaData title="ESK8CAD/Home" />
             <header>
                 <SiteNavbar isHomepage={true} />
                 <div className="py-5 text-center">

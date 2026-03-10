@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useEffect } from "react"
 import useMetaData from "../hooks/useMetaData"
 import "../scss/styles.scss"
 
@@ -8,35 +8,29 @@ type MetaDataProps = {
     image?: string
 }
 
-export default ({ title, description, image }: MetaDataProps) => {
+const SiteMetaData = ({ title, description, image }: MetaDataProps) => {
     const { title: defaultTitle, description: defaultDescription, image: defaultImage, siteUrl } = useMetaData()
 
+    const finalTitle = title || defaultTitle;
+    const finalDescription = description || defaultDescription;
+
+    useEffect(() => {
+        document.title = finalTitle;
+    }, [finalTitle]);
+
     return (
-        <>
-            {/* Site name */}
-            <title>{title || defaultTitle}</title>
-            <meta name="site_name" content={title || defaultTitle} />
-            <meta property="og:title" content={title || defaultTitle} />
-
-            {/* Site icon */}
-            <meta property="og:image" content={image || siteUrl + defaultImage}></meta>
-            <link rel="icon" href="/favicon.ico?v=2" />
-            <link rel="shortcut icon" href="/favicon.ico?v=2" />
-
-            {/* Site description */}
-            <meta name="description" content={description || defaultDescription} />
+        <React.Fragment>
+            {/* Note: In Vite/React, we can't just return <title> in a component and expect it to move to head without something like Helmet. */}
+            {/* But we can still provide the meta tags here which some systems expect. */}
+            <meta property="og:title" content={finalTitle} />
+            <meta property="og:image" content={image || siteUrl + defaultImage} />
+            <meta name="description" content={finalDescription} />
             <meta name="keywords" content="esk8, cad, electric skateboard, diy, 3d print, open source, aftermarket" />
-
-            {/* Site properties */}
             <meta property="og:type" content="website" />
             <meta property="og:locale" content="en_US" />
-
-            {/* Manifest */}
-            <link rel="manifest" href="/manifest.webmanifest"></link>
-
-            {/* Bootstrap */}
-            <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossOrigin="anonymous" />
-            <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossOrigin="anonymous"></script>
-        </>
+            <link rel="manifest" href="/manifest.webmanifest" />
+        </React.Fragment>
     )
 }
+
+export default SiteMetaData;

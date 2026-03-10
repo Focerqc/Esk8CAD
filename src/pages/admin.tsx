@@ -1,20 +1,13 @@
-import { type PageProps, navigate } from "gatsby"
+import { useNavigate, useParams } from "react-router-dom"
 import React, { useState, useEffect, useMemo } from "react"
 import { Container, Card, Form, Button, Alert, Spinner, Tabs, Tab, Row, Col, Badge, Stack, InputGroup, Modal } from "react-bootstrap"
 import SiteNavbar from "../components/SiteNavbar"
 import SiteFooter from "../components/SiteFooter"
+import SiteMetaData from "../components/SiteMetaData"
 import HardwareFields from "../components/Forms/HardwareFields"
 import { getSupabaseClient, Part, Brand, Model } from "../lib/supabase"
 import { SupabaseClient, User, AuthChangeEvent, Session } from "@supabase/supabase-js"
-import { Buffer } from "buffer"
 import { useBoardHook } from "../hooks/useBoardHook"
-
-// Admin UI Sync Force Rebuild 1.2
-const GlobalStyles = () => (
-    <>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" />
-    </>
-);
 
 interface Taxonomy {
     id: string;
@@ -95,7 +88,9 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
     );
 };
 
-export default function AdminPage(props: PageProps) {
+export default function AdminPage() {
+    const navigate = useNavigate();
+    const { tab: urlTab } = useParams();
     const [isMounted, setIsMounted] = useState(false);
     const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
     const [user, setUser] = useState<User | null>(null);
@@ -179,15 +174,12 @@ export default function AdminPage(props: PageProps) {
         }
     };
 
+    // Sync tab from URL params
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const path = window.location.pathname;
-            const segments = path.split('/').filter(Boolean);
-            if (segments.length >= 2) {
-                setActiveTab(segments[1]);
-            }
+        if (urlTab) {
+            setActiveTab(urlTab);
         }
-    }, []);
+    }, [urlTab]);
 
     // Sync Page Title to internal Navigation
     useEffect(() => {
@@ -295,9 +287,9 @@ export default function AdminPage(props: PageProps) {
                 const { data: { session } } = await supabase.auth.getSession();
                 if (mounted) {
                     // Admin access via env var (never hardcode emails)
-                    const adminEmail = process.env.GATSBY_ADMIN_EMAIL;
+                    const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
                     if (!adminEmail) {
-                        if (process.env.NODE_ENV === 'development') console.warn("GATSBY_ADMIN_EMAIL is missing from environment. Admin access disabled.");
+                        if (import.meta.env.DEV) console.warn("VITE_ADMIN_EMAIL is missing from environment. Admin access disabled.");
                     } else if (session?.user && session.user.email === adminEmail) {
                         setUser(session.user);
                     }
@@ -419,9 +411,9 @@ export default function AdminPage(props: PageProps) {
             if (signInError) throw signInError;
 
             // Admin access via env var (never hardcode emails)
-            const adminEmail = process.env.GATSBY_ADMIN_EMAIL;
+            const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
             if (!adminEmail) {
-                if (process.env.NODE_ENV === 'development') console.warn("GATSBY_ADMIN_EMAIL is missing from environment. Admin access disabled.");
+                if (import.meta.env.DEV) console.warn("VITE_ADMIN_EMAIL is missing from environment. Admin access disabled.");
                 throw new Error("Admin email configuration missing on server.");
             }
             if (data?.session?.user?.email !== adminEmail) throw new Error("Unauthorized access. Admin privileges required.");
@@ -914,7 +906,7 @@ export default function AdminPage(props: PageProps) {
                     <Alert variant="danger" className="text-center shadow-lg p-5 w-100" style={{ maxWidth: '600px' }}>
                         <h4 className="fw-bold mb-3">System Configuration Error</h4>
                         <p className="mb-0">
-                            The Supabase connection could not be established. Ensure `GATSBY_SUPABASE_URL` and `GATSBY_SUPABASE_ANON_KEY` are provided.
+                            The Supabase connection could not be established. Ensure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are provided.
                         </p>
                     </Alert>
                 </Container>
@@ -926,7 +918,6 @@ export default function AdminPage(props: PageProps) {
     if (isAuthChecking) {
         return (
             <div className="bg-black text-light min-vh-100 d-flex flex-column">
-                <GlobalStyles />
                 <SiteNavbar />
                 <Container className="flex-grow-1 d-flex align-items-center justify-content-center">
                     <Spinner animation="border" variant="info" />
@@ -970,6 +961,7 @@ export default function AdminPage(props: PageProps) {
 
     return (
         <div className="bg-black text-light min-vh-100 d-flex flex-column pb-5 page-items">
+            <SiteMetaData title={`ESK8CAD/Admin${activeTab ? `/${activeTab}` : ''}`} />
             <style dangerouslySetInnerHTML={{
                 __html: `
                 .bg-secondary { background-color: #121417 !important; } 

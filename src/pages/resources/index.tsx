@@ -1,4 +1,3 @@
-import { type PageProps } from "gatsby"
 import React from "react"
 import { Container } from "react-bootstrap"
 import ResourceTypesLinks from "../../components/ResourceTypesLinks"
@@ -6,10 +5,10 @@ import SiteFooter from "../../components/SiteFooter"
 import SiteMetaData from "../../components/SiteMetaData"
 import SiteNavbar from "../../components/SiteNavbar"
 
-const Page: React.FC<PageProps> = () => {
+const Page: React.FC<any> = () => {
     return (
         <>
-            
+
             <SiteMetaData title="Resources | ESK8CAD.COM" /><header>
                 <SiteNavbar isHomepage={true} />
 
@@ -29,7 +28,7 @@ const Page: React.FC<PageProps> = () => {
                     <ResourceTypesLinks />
                 </Container>
             </main>
-                
+
             <SiteFooter />
         </>
     )

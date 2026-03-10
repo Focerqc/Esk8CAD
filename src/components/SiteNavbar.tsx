@@ -1,9 +1,7 @@
-import { Link, navigate } from "gatsby"
-import { StaticImage } from "gatsby-plugin-image"
+import { Link, useNavigate } from "react-router-dom"
 import React, { useState } from "react"
 import { Button, Container, Modal, Nav, Navbar, NavDropdown, Stack } from "react-bootstrap"
 import { FaBars, FaMagnifyingGlass } from "react-icons/fa6"
-import { DiscordInvite, DiscordThread } from "../util/siteVariables"
 import SearchModalCard from "./SearchModalCard"
 import SearchModalSearchbar from "./SearchModalSearchbar"
 import allParts, { useParts } from "../util/parts"
@@ -15,33 +13,33 @@ import { useEffect } from "react"
 type NavPlatformDef = { label: string; href: string; divider?: never } | { divider: true; label?: never; href?: never };
 
 const DEFAULT_PLATFORMS: NavPlatformDef[] = [
-    { label: "Street (DIY/Generic)", href: "/street" },
-    { label: "Off-Road (DIY/Generic)", href: "/offroad" },
-    { label: "Misc", href: "/misc" },
+    { label: "Street (DIY/Generic)", href: "/parts?brand=Street%20(DIY/Generic)" },
+    { label: "Off-Road (DIY/Generic)", href: "/parts?brand=Off-Road%20(DIY/Generic)" },
+    { label: "Misc", href: "/parts?brand=Misc" },
     { divider: true },
-    { label: "3D Servisas", href: "/3dservisas" },
-    { label: "Acedeck", href: "/acedeck" },
-    { label: "Apex Boards", href: "/apex" },
-    { label: "Backfire", href: "/backfire" },
-    { label: "Bioboards", href: "/bioboards" },
-    { label: "Boardnamics", href: "/boardnamics" },
-    { label: "Defiant Board Society", href: "/defiant" },
-    { label: "Evolve", href: "/evolve" },
-    { label: "Exway", href: "/exway" },
-    { label: "Fluxmotion", href: "/fluxmotion" },
-    { label: "Hoyt St", href: "/hoyt" },
-    { label: "Lacroix Boards", href: "/lacroix" },
-    { label: "Linnpower", href: "/linnpower" },
-    { label: "MBoards", href: "/mboards" },
-    { label: "MBS", href: "/mbs" },
-    { label: "Meepo", href: "/meepo" },
-    { label: "Newbee", href: "/newbee" },
-    { label: "Propel", href: "/propel" },
-    { label: "Radium Performance", href: "/radium" },
-    { label: "Stooge Raceboards", href: "/stooge" },
-    { label: "Summerboard", href: "/summerboard" },
-    { label: "Trampa Boards", href: "/trampa" },
-    { label: "Wowgo", href: "/wowgo" }
+    { label: "3D Servisas", href: "/parts?brand=3D%20Servisas" },
+    { label: "Acedeck", href: "/parts?brand=Acedeck" },
+    { label: "Apex Boards", href: "/parts?brand=Apex%20Boards" },
+    { label: "Backfire", href: "/parts?brand=Backfire" },
+    { label: "Bioboards", href: "/parts?brand=Bioboards" },
+    { label: "Boardnamics", href: "/parts?brand=Boardnamics" },
+    { label: "Defiant Board Society", href: "/parts?brand=Defiant%20Board%20Society" },
+    { label: "Evolve", href: "/parts?brand=Evolve" },
+    { label: "Exway", href: "/parts?brand=Exway" },
+    { label: "Fluxmotion", href: "/parts?brand=Fluxmotion" },
+    { label: "Hoyt St", href: "/parts?brand=Hoyt%20St" },
+    { label: "Lacroix Boards", href: "/parts?brand=Lacroix%20Boards" },
+    { label: "Linnpower", href: "/parts?brand=Linnpower" },
+    { label: "MBoards", href: "/parts?brand=MBoards" },
+    { label: "MBS", href: "/parts?brand=MBS" },
+    { label: "Meepo", href: "/parts?brand=Meepo" },
+    { label: "Newbee", href: "/parts?brand=Newbee" },
+    { label: "Propel", href: "/parts?brand=Propel" },
+    { label: "Radium Performance", href: "/parts?brand=Radium%20Performance" },
+    { label: "Stooge Raceboards", href: "/parts?brand=Stooge%20Raceboards" },
+    { label: "Summerboard", href: "/parts?brand=Summerboard" },
+    { label: "Trampa Boards", href: "/parts?brand=Trampa%20Boards" },
+    { label: "Wowgo", href: "/parts?brand=Wowgo" }
 ];
 
 type NavbarProps = {
@@ -69,6 +67,7 @@ const mapPartToItemData = (part: Part): ItemData => {
  * @param NavbarProps - a {@link NavbarProps} object
  */
 export default ({ isHomepage }: NavbarProps) => {
+    const navigate = useNavigate();
     const registryParts = usePartRegistry();
     const { parts: cloudParts } = useParts(); // Fetch live database parts
     const [showModal, setShowModal] = useState(false)
@@ -95,7 +94,7 @@ export default ({ isHomepage }: NavbarProps) => {
                         const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
                         dynamicPlatforms.push({
                             label: p.name,
-                            href: existingStatic ? existingStatic.href : `/brand/${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+                            href: existingStatic ? existingStatic.href : `/parts?brand=${encodeURIComponent(p.name)}`
                         } as NavPlatformDef);
                     });
                     setNavPlatforms(dynamicPlatforms);
@@ -155,6 +154,18 @@ export default ({ isHomepage }: NavbarProps) => {
                         background-color: #090a0b !important;
                         border: 1px solid #24282d !important;
                         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                        max-height: 800px !important;
+                        overflow-y: auto !important;
+                    }
+                    .dropdown-menu::-webkit-scrollbar {
+                        width: 4px;
+                    }
+                    .dropdown-menu::-webkit-scrollbar-track {
+                        background: transparent;
+                    }
+                    .dropdown-menu::-webkit-scrollbar-thumb {
+                        background: #333;
+                        border-radius: 10px;
                     }
                     @media (max-width: 991px) {
                         .navbar-collapse {
@@ -165,9 +176,9 @@ export default ({ isHomepage }: NavbarProps) => {
                     }
                 `}} />
 
-                <Navbar.Brand href="/" onClick={handleLogoClick} className="d-flex align-items-center gap-2">
-                    <StaticImage
-                        src="../../static/images/logo.png"
+                <Navbar.Brand as={Link} to="/" onClick={handleLogoClick} className="d-flex align-items-center gap-2">
+                    <img
+                        src="/images/logo.png"
                         width={45}
                         height={45}
                         className={(isSpinning ? " spin-once" : "")}
@@ -203,9 +214,9 @@ export default ({ isHomepage }: NavbarProps) => {
 
                 <Navbar.Collapse id="site-navbar" className="order-lg-2">
                     <Nav className="ms-auto me-lg-4 gap-lg-2">
-                        <Nav.Link href="/">Home</Nav.Link>
+                        <Nav.Link as={Link} to="/">Home</Nav.Link>
+                        <Nav.Link as={Link} to="/parts?brand=OEM" style={{ color: '#00E5FF', fontWeight: '900' }}>OEM</Nav.Link>
                         <Nav.Link as={Link} to="/submit">Submit</Nav.Link>
-                        <Nav.Link as={Link} to="/oem" style={{ color: '#00E5FF', fontWeight: '900' }}>OEM</Nav.Link>
                         <NavDropdown title="Board Platforms" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-parts-dropdown">
                             {navPlatforms.map((p, index) => {
                                 if (p.divider) return <NavDropdown.Divider key={`nav-divider-${index}`} />;
@@ -217,17 +228,19 @@ export default ({ isHomepage }: NavbarProps) => {
                             })}
                         </NavDropdown>
                         <NavDropdown title="Resources" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-resources-dropdown">
-                            <NavDropdown.Item href="/resources/applications" target="_self">Applications</NavDropdown.Item>
-                            <NavDropdown.Item href="/resources/repositories" target="_self">Code Repositories</NavDropdown.Item>
-                            <NavDropdown.Item href="/resources/spreadsheets" target="_self">Spreadsheets</NavDropdown.Item>
-                            <NavDropdown.Item href="/resources/vendors" target="_self">Vendors</NavDropdown.Item>
-                            <NavDropdown.Item href="/resources/videoguides" target="_self">Video Guides</NavDropdown.Item>
-                            <NavDropdown.Item href="/resources/websites" target="_self">Websites</NavDropdown.Item>
-                            <NavDropdown.Item href="/resources/writtenguides" target="_self">Written Guides</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/applications">Applications</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/repositories">Code Repositories</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/spreadsheets">Spreadsheets</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/vendors">Vendors</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/videoguides">Video Guides</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/websites">Websites</NavDropdown.Item>
+                            <NavDropdown.Item as={Link} to="/resources/writtenguides">Written Guides</NavDropdown.Item>
                         </NavDropdown>
                         <NavDropdown title="Get in contact" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-contribute-dropdown">
-                            <NavDropdown.Item href={DiscordInvite} target="_blank">1. Join Vescify Discord</NavDropdown.Item>
-                            <NavDropdown.Item href={DiscordThread} target="_blank">2. Post in Thread</NavDropdown.Item>
+                            <div className="px-3 py-2 text-white small" style={{ minWidth: '160px' }}>
+                                Email to:<br />
+                                <span className="text-info fw-bold">Text@email.com</span>
+                            </div>
                         </NavDropdown>
                     </Nav>
                 </Navbar.Collapse>

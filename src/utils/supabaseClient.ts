@@ -8,12 +8,12 @@ export const getSupabaseClient = (): SupabaseClient | null => {
     if (supabaseInstance) return supabaseInstance;
 
     // SSR Guard - prevents Gatsby build crashes
-    if (typeof window === 'undefined') {
-        return null;
-    }
+    // if (typeof window === 'undefined') {
+    //     return null;
+    // }
 
-    const supabaseUrl = process.env.GATSBY_SUPABASE_URL || '';
-    const supabaseAnonKey = process.env.GATSBY_SUPABASE_ANON_KEY || '';
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
     // Defensive deployment check - length checks to avoid starting a broken bundle
     if (!supabaseUrl || supabaseUrl.length < 10 || !supabaseAnonKey || supabaseAnonKey.length < 10) {

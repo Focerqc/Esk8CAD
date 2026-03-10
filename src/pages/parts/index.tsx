@@ -1,4 +1,3 @@
-import { type PageProps } from "gatsby"
 import React, { useState, useEffect } from "react"
 import { Container } from "react-bootstrap"
 import SiteNavbar from "../../components/SiteNavbar"
@@ -7,9 +6,11 @@ import SiteMetaData from "../../components/SiteMetaData"
 import ItemListSearchbar from "../../components/ItemListSearchbar"
 import PartTypesLinks from "../../components/PartTypesLinks"
 import windowIsDefined from "../../hooks/windowIsDefined"
+import { useParams } from "react-router-dom"
 import "../../scss/pages/items.scss"
 
-const Page: React.FC<PageProps> = () => {
+const Page: React.FC<any> = () => {
+    const { brand: routeBrand, category: routeCategory } = useParams();
     const [activePlatform, setActivePlatform] = useState<string | null>(null);
     const [hasPlatformParam, setHasPlatformParam] = useState(true);
 
@@ -17,29 +18,35 @@ const Page: React.FC<PageProps> = () => {
         if (!windowIsDefined()) return;
 
         const params = new URLSearchParams(window.location.search);
-        let param = params.get("brand") || params.get("platform");
+        let brandParam = routeBrand || params.get("brand") || params.get("platform");
+        let activeCategory = routeCategory || params.get("category") || params.get("tag");
 
-        if (!param) {
+        if (!brandParam && !activeCategory) {
             setHasPlatformParam(false);
             return;
         }
 
-        let platformName = param;
+        let platformName = brandParam;
 
         // Restore styling if it's an encoded slug from the relational update links
-        if (param === param.toLowerCase() && !param.includes(" ")) {
-            if (param === "meepo") platformName = "Meepo";
-            else if (param === "newbee") platformName = "Newbee";
-            else if (param === "acedeck") platformName = "Acedeck";
-            else if (param === "3dservisas") platformName = "3D Servisas";
+        if (brandParam && brandParam === brandParam.toLowerCase() && !brandParam.includes(" ")) {
+            const lowerParam = brandParam.toLowerCase();
+            if (lowerParam === "meepo") platformName = "Meepo";
+            else if (lowerParam === "newbee") platformName = "Newbee";
+            else if (lowerParam === "acedeck") platformName = "Acedeck";
+            else if (lowerParam === "3dservisas") platformName = "3D Servisas";
+            else if (lowerParam === "mbs") platformName = "MBS";
             else {
-                // Capitalize standard generic words that were URL safe
-                platformName = param.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                platformName = brandParam.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
             }
         }
 
+        // If no brand but has category, we set platform name to the category for the title
+        const displayName = platformName || (activeCategory ? activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1) : "");
+
         setActivePlatform(platformName);
-    }, []);
+        setHasPlatformParam(true);
+    }, [routeBrand, routeCategory]);
 
     if (!hasPlatformParam) {
         return (
@@ -58,21 +65,20 @@ const Page: React.FC<PageProps> = () => {
         );
     }
 
-    if (!activePlatform) {
-        return null; // Await client hook
-    }
+    const metaTitle = activePlatform ? `ESK8CAD/${activePlatform}` : (routeCategory ? `ESK8CAD/${routeCategory.charAt(0).toUpperCase() + routeCategory.slice(1)}` : "ESK8CAD Parts Catalog");
+    const titleText = activePlatform ? `${activePlatform} Parts` : (routeCategory ? `${routeCategory.charAt(0).toUpperCase() + routeCategory.slice(1)}` : "Parts");
 
     return (
         <div className="bg-black text-light min-vh-100 d-flex flex-column pb-5 page-items">
-            <SiteMetaData title={`${activePlatform} Parts | ESK8CAD.COM`} />
+            <SiteMetaData title={metaTitle} />
             <header>
                 <SiteNavbar />
-                <h1 className="flex-center">{activePlatform} Parts</h1>
+                <h1 className="flex-center uppercase letter-spacing-2 mt-5 mb-0" style={{ fontWeight: 900 }}>{titleText}</h1>
             </header>
 
             <main className="page-items flex-grow-1">
                 <Container>
-                    <ItemListSearchbar platformOverride={activePlatform} />
+                    <ItemListSearchbar platformOverride={activePlatform || undefined} />
                 </Container>
             </main>
             <SiteFooter />

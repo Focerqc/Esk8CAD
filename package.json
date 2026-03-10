@@ -1,65 +1,53 @@
 {
-    "name": "pubparts.xyz",
+    "name": "esk8cad-com",
     "version": "1.0.0",
     "private": true,
     "license": "Apache-2.0",
-    "description": "pubparts.xyz",
-    "author": "Jared Harrison <jared@jarediscoding.com>",
+    "description": "ESK8CAD.COM",
+    "author": "Quinn <test@gmail.com>",
     "repository": {
         "type": "git",
-        "url": "https://github.com/Jared-Is-Coding/pubparts.xyz"
+        "url": "https://github.com/Focerqc/Esk8CAD/"
     },
     "bugs": {
-        "url": "https://github.com/Jared-Is-Coding/pubparts.xyz/issues"
+        "url": "https://github.com/Focerqc/Esk8CAD/issues"
     },
     "scripts": {
-        "develop": "node --max-old-space-size=4096 node_modules/gatsby/dist/bin/gatsby develop",
-        "start": "node --max-old-space-size=4096 node_modules/gatsby/dist/bin/gatsby develop",
-        "prebuild": "node check-env.js",
-        "build": "node --max-old-space-size=4096 node_modules/gatsby/dist/bin/gatsby build",
-        "serve": "gatsby serve",
-        "clean": "gatsby clean",
+        "dev": "vite",
+        "start": "npm run dev",
+        "build": "vite build",
+        "preview": "vite preview",
         "typecheck": "tsc --noEmit"
     },
     "dependencies": {
-        "@aws-sdk/client-s3": "^3.1003.0",
-        "@hookform/resolvers": "^5.2.2",
+        "@hookform/resolvers": "^3.3.4",
         "@supabase/supabase-js": "^2.97.0",
-        "bootstrap": "^5.3.8",
+        "bootstrap": "^5.3.3",
         "dotenv": "^17.3.1",
-        "fslightbox-react": "^2.0.0",
-        "gatsby": "^3.15.0",
-        "gatsby-link": "^3.15.0",
-        "gatsby-plugin-create-client-paths": "^3.15.0",
-        "gatsby-plugin-image": "^1.15.0",
-        "gatsby-plugin-robots-txt": "^1.7.1",
-        "gatsby-plugin-sass": "^4.15.0",
-        "gatsby-plugin-sharp": "^3.15.0",
-        "gatsby-plugin-sitemap": "^4.7.0",
-        "gatsby-react-router-scroll": "^3.7.0",
-        "gatsby-source-filesystem": "^3.15.0",
-        "gatsby-transformer-json": "^3.15.0",
-        "gatsby-transformer-sharp": "^3.15.0",
-        "graphql": "^15.8.0",
+        "fslightbox-react": "^1.7.6",
         "octokit": "^5.0.5",
-        "react": "^17.0.2",
-        "react-bootstrap": "^2.10.10",
-        "react-dom": "^17.0.2",
-        "react-hook-form": "^7.71.2",
+        "react": "^18.2.0",
+        "react-bootstrap": "^2.10.1",
+        "react-dom": "^18.2.0",
+        "react-hook-form": "^7.51.0",
         "react-hot-toast": "^2.6.0",
-        "react-icons": "^5.3.0",
+        "react-icons": "^5.0.1",
+        "react-router-dom": "^6.22.3",
         "react-turnstile": "^1.1.5",
         "sass": "^1.79.6",
-        "zod": "^4.3.6"
+        "zod": "^3.22.4"
     },
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20260214.0",
-        "@types/fslightbox-react": "^1.8.0",
+        "@types/fslightbox-react": "^1.7.0",
         "@types/node": "^20.19.33",
-        "@types/react": "^17.0.2",
-        "@types/react-dom": "^17.0.2",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "@vitejs/plugin-react": "^4.2.1",
         "typescript": "^5.3.3",
-        "vitest": "^4.0.18"
+        "vite": "^5.1.4",
+        "vite-tsconfig-paths": "^4.3.1",
+        "vitest": "^1.3.1"
     },
     "overrides": {
         "@parcel/watcher": "~2.1.0"

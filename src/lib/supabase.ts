@@ -69,12 +69,12 @@ export function getSupabaseClient(): SupabaseClient | null {
         return supabaseInstance;
     }
 
-    if (typeof window === 'undefined') {
-        return null; // Return null during Gatsby SSR
-    }
+    // if (typeof window === 'undefined') {
+    //     return null; // Vite handles this differently, but we'll keep the logic if needed
+    // }
 
-    const supabaseUrl = process.env.GATSBY_SUPABASE_URL;
-    const supabaseAnonKey = process.env.GATSBY_SUPABASE_ANON_KEY;
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
     // DIAGNOSTIC LOGGING: Log only the presence of keys, not values.
     console.log("Supabase URL present:", !!supabaseUrl);
@@ -82,7 +82,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
     // Defensive deployment check: Includes length-check to prevent shipping a broken bundle
     if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.trim() === '' || supabaseAnonKey.trim() === '' || supabaseUrl === 'undefined' || supabaseUrl.length < 10 || supabaseAnonKey.length < 10) {
-        console.error("FATAL ERROR: Supabase environment variables are missing or invalid! GATSBY_SUPABASE_URL and GATSBY_SUPABASE_ANON_KEY must be defined properly.");
+        console.error("FATAL ERROR: Supabase environment variables are missing or invalid! VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be defined properly.");
         return null; // Gracefully handle missing variables by returning null
     }
 

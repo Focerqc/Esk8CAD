@@ -112,5 +112,6 @@
         "XLITE",
         "xrclassic",
         "xrparts"
-    ]
+    ],
+    "terminal.integrated.reveal": "always"
 }

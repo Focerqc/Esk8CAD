@@ -1,6 +1,6 @@
 import React, { ChangeEvent, useEffect, useRef, useState, useMemo } from "react"
 import { Alert, Button, ButtonGroup, Form, Stack, ToggleButton, Row, Col, Card, Badge } from "react-bootstrap"
-import { Link, navigate } from "gatsby"
+import { Link, useNavigate } from "react-router-dom"
 import { FaArrowRotateLeft } from "react-icons/fa6"
 import windowIsDefined from "../hooks/windowIsDefined"
 import CopyLinkButton from "./CopyLinkButton"
@@ -30,7 +30,20 @@ const mapPartToSchema = (part: Part): PartSchema => {
     }
 }
 
-// Helper to deduce platform directly from URL so we don't have to alter every platform page
+// Helper to deduce category from URL (/parts/tags/category-name)
+const getCategoryFromURL = () => {
+    if (!windowIsDefined()) return null;
+    const path = window.location.pathname.toLowerCase();
+    if (path.includes('/parts/tags/')) {
+        return path.split('/parts/tags/')[1].replace(/\/$/, '');
+    }
+    if (path.includes('/tags/')) {
+        return path.split('/tags/')[1].replace(/\/$/, '');
+    }
+    return null;
+}
+
+// Helper to deduce platform directly from URL
 const getPlatformFromURL = () => {
     if (!windowIsDefined()) return undefined;
     const path = window.location.pathname.toLowerCase();
@@ -79,8 +92,7 @@ const getModelFromURL = () => {
     const modelNameIndex = isUniversal ? 3 : 2;
 
     if (segments.length > modelNameIndex && segments[modelsIndex] === 'models') {
-        const rawModel = segments[modelNameIndex];
-        return rawModel.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        return segments[modelNameIndex]; // Return the raw slug for precise comparison
     }
     return null;
 };
@@ -106,7 +118,9 @@ const SkeletonGrid = () => (
 );
 
 export default ({ platformOverride }: { platformOverride?: string }) => {
+    const navigate = useNavigate();
     const activePlatform = useMemo(() => platformOverride || getPlatformFromURL() || null, [platformOverride]);
+    const urlCategory = useMemo(() => getCategoryFromURL(), []);
 
     // State
     const [searchText, setSearchText] = useState("");
@@ -143,13 +157,21 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
         if (windowIsDefined() && activePlatform) {
             const segments = window.location.pathname.split('/').filter(Boolean);
             const isUniversal = segments[0] === 'brand';
-            const platformSlug = isUniversal ? `brand/${segments[1]}` : segments[0];
+
+            // Clean slug for the brand
+            const brandSlug = activePlatform.toLowerCase()
+                .replace(/ street \(diy\/generic\)/g, 'street')
+                .replace(/ off-road \(diy\/generic\)/g, 'offroad')
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '');
+
+            let targetBase = isUniversal ? `brand/${segments[1]}` : brandSlug;
 
             if (modelName) {
                 const modelSlug = modelName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-                navigate(`/${platformSlug}/models/${modelSlug}`, { replace: true });
+                navigate(`/${targetBase}/models/${modelSlug}`, { replace: true });
             } else {
-                navigate(`/${platformSlug}`, { replace: true });
+                navigate(`/${targetBase}`, { replace: true });
             }
         }
     };
@@ -262,13 +284,13 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                             <div className="position-relative z-index-1">
                                 <div className="d-flex align-items-center gap-3 mb-3">
                                     <div className="bg-info" style={{ height: '2px', width: '40px' }}></div>
-                                    <span className="text-info text-uppercase fw-bold small text-tracking-widest">Hardware Repository</span>
+                                    <span className="text-info text-uppercase fw-bold small text-tracking-widest">{urlCategory ? "Sitewide Filter" : "Hardware Repository"}</span>
                                 </div>
                                 <h1 className="display-4 fw-black text-white text-uppercase mb-4" style={{ letterSpacing: '-0.02em' }}>
-                                    {activePlatform}
+                                    {activePlatform || (urlCategory ? urlCategory.charAt(0).toUpperCase() + urlCategory.slice(1) : "Catalog")}
                                 </h1>
 
-                                <h6 className="text-secondary text-uppercase fw-bold small text-tracking-widest mb-3 italic">Select Board Model</h6>
+                                <h6 className="text-secondary text-uppercase fw-bold small text-tracking-widest mb-3 italic">{activePlatform ? "Select Board Model" : "Models Available"}</h6>
                                 <div className="d-flex flex-wrap gap-2">
                                     <Button
                                         variant={selectedModel === null ? "info" : "outline-light"}

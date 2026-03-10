@@ -8,32 +8,32 @@ import { getSupabaseClient } from "../lib/supabase"
  */
 const PartTypesLinks: React.FC = () => {
     const DEFAULT_PLATFORMS = [
-        { label: "Street (DIY/Generic)", href: "/street" },
-        { label: "Off-Road (DIY/Generic)", href: "/offroad" },
-        { label: "Misc", href: "/misc" },
-        { label: "3D Servisas", href: "/3dservisas" },
-        { label: "Acedeck", href: "/acedeck" },
-        { label: "Apex Boards", href: "/apex" },
-        { label: "Backfire", href: "/backfire" },
-        { label: "Bioboards", href: "/bioboards" },
-        { label: "Boardnamics", href: "/boardnamics" },
-        { label: "Defiant Board Society", href: "/defiant" },
-        { label: "Evolve", href: "/evolve" },
-        { label: "Exway", href: "/exway" },
-        { label: "Fluxmotion", href: "/fluxmotion" },
-        { label: "Hoyt St", href: "/hoyt" },
-        { label: "Lacroix Boards", href: "/lacroix" },
-        { label: "Linnpower", href: "/linnpower" },
-        { label: "MBoards", href: "/mboards" },
-        { label: "MBS", href: "/mbs" },
-        { label: "Meepo", href: "/meepo" },
-        { label: "Newbee", href: "/newbee" },
-        { label: "Propel", href: "/propel" },
-        { label: "Radium Performance", href: "/radium" },
-        { label: "Stooge Raceboards", href: "/stooge" },
-        { label: "Summerboard", href: "/summerboard" },
-        { label: "Trampa Boards", href: "/trampa" },
-        { label: "Wowgo", href: "/wowgo" }
+        { label: "Street (DIY/Generic)", href: "/parts?brand=Street%20(DIY/Generic)" },
+        { label: "Off-Road (DIY/Generic)", href: "/parts?brand=Off-Road%20(DIY/Generic)" },
+        { label: "Misc", href: "/parts?brand=Misc" },
+        { label: "3D Servisas", href: "/parts?brand=3D%20Servisas" },
+        { label: "Acedeck", href: "/parts?brand=Acedeck" },
+        { label: "Apex Boards", href: "/parts?brand=Apex%20Boards" },
+        { label: "Backfire", href: "/parts?brand=Backfire" },
+        { label: "Bioboards", href: "/parts?brand=Bioboards" },
+        { label: "Boardnamics", href: "/parts?brand=Boardnamics" },
+        { label: "Defiant Board Society", href: "/parts?brand=Defiant%20Board%20Society" },
+        { label: "Evolve", href: "/parts?brand=Evolve" },
+        { label: "Exway", href: "/parts?brand=Exway" },
+        { label: "Fluxmotion", href: "/parts?brand=Fluxmotion" },
+        { label: "Hoyt St", href: "/parts?brand=Hoyt%20St" },
+        { label: "Lacroix Boards", href: "/parts?brand=Lacroix%20Boards" },
+        { label: "Linnpower", href: "/parts?brand=Linnpower" },
+        { label: "MBoards", href: "/parts?brand=MBoards" },
+        { label: "MBS", href: "/parts?brand=MBS" },
+        { label: "Meepo", href: "/parts?brand=Meepo" },
+        { label: "Newbee", href: "/parts?brand=Newbee" },
+        { label: "Propel", href: "/parts?brand=Propel" },
+        { label: "Radium Performance", href: "/parts?brand=Radium%20Performance" },
+        { label: "Stooge Raceboards", href: "/parts?brand=Stooge%20Raceboards" },
+        { label: "Summerboard", href: "/parts?brand=Summerboard" },
+        { label: "Trampa Boards", href: "/parts?brand=Trampa%20Boards" },
+        { label: "Wowgo", href: "/parts?brand=Wowgo" }
     ];
 
     const [platforms, setPlatforms] = useState<{ label: string, href: string }[]>(DEFAULT_PLATFORMS)
@@ -50,7 +50,7 @@ const PartTypesLinks: React.FC = () => {
                         const existingStatic = DEFAULT_PLATFORMS.find(dp => dp.label === p.name);
                         return {
                             label: p.name,
-                            href: existingStatic ? existingStatic.href : `/${p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+                            href: existingStatic ? existingStatic.href : `/parts?brand=${encodeURIComponent(p.name)}`
                         };
                     });
                     setPlatforms(dynamicPlatforms);

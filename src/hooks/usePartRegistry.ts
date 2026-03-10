@@ -1,4 +1,4 @@
-import { graphql, useStaticQuery } from "gatsby"
+import React from "react"
 
 interface ItemData {
     title: string;
@@ -10,9 +10,6 @@ interface ItemData {
     dropboxZipLastUpdated: string;
     externalUrl: string;
     isOem: boolean;
-    parent?: {
-        relativePath: string;
-    };
 }
 
 /**
@@ -20,30 +17,7 @@ interface ItemData {
  * and merge them with any hardcoded parts if necessary.
  */
 export const usePartRegistry = () => {
-    const data = useStaticQuery(graphql`
-        query {
-            allPartsJson {
-                nodes {
-                    title
-                    imageSrc
-                    platform
-                    fabricationMethod
-                    typeOfPart
-                    dropboxUrl
-                    dropboxZipLastUpdated
-                    externalUrl
-                    isOem
-                    parent {
-                        ... on File {
-                            relativePath
-                        }
-                    }
-                }
-            }
-        }
-    `)
-
-    return data.allPartsJson.nodes as ItemData[]
+    return [] as ItemData[]
 }
 
 export default usePartRegistry

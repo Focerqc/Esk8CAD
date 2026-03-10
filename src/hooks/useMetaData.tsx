@@ -1,21 +1,14 @@
-import { graphql, useStaticQuery } from "gatsby"
+
+import React from "react"
 
 /**
  * @returns siteMetadata object from graphql query
  */
 export default () => {
-    const data = useStaticQuery(graphql`
-        query {
-            site {
-                siteMetadata {
-                    title
-                    description
-                    image
-                    siteUrl
-                }
-            }
-        }
-    `)
-
-    return data.site.siteMetadata
+    return {
+        title: "ESK8CAD.COM",
+        description: "Hardware Repository for DIY Electric Skateboards",
+        image: "/logo.png",
+        siteUrl: "https://esk8cad.com"
+    }
 }
