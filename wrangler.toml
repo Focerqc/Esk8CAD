@@ -3,9 +3,9 @@ compatibility_date = "2024-01-01"
 pages_build_output_dir = "dist"
 
 [vars]
-GATSBY_SUPABASE_URL = "https://vupaclakcmrkzmrgmfou.supabase.co"
-GATSBY_SUPABASE_ANON_KEY = "sb_publishable_bXcnBAcXwFbj28Z7csY4UQ_wCdm_87o"
-GATSBY_ADMIN_EMAIL = "quinncfoster@gmail.com"
+VITE_SUPABASE_URL = "https://vupaclakcmrkzmrgmfou.supabase.co"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_bXcnBAcXwFbj28Z7csY4UQ_wCdm_87o"
+VITE_ADMIN_EMAIL = "quinncfoster@gmail.com"
 
 [[kv_namespaces]]
 

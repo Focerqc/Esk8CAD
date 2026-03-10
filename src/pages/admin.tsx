@@ -306,9 +306,9 @@ export default function AdminPage() {
         const { data: authListener } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
             if (mounted) {
                 // Admin access via env var (never hardcode emails)
-                const adminEmail = process.env.GATSBY_ADMIN_EMAIL;
+                const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
                 if (!adminEmail) {
-                    if (process.env.NODE_ENV === 'development') console.warn("GATSBY_ADMIN_EMAIL is missing from environment. Admin access disabled.");
+                    if (import.meta.env.DEV) console.warn("VITE_ADMIN_EMAIL is missing from environment. Admin access disabled.");
                     setUser(null);
                 } else if (session?.user && session.user.email === adminEmail) {
                     setUser(session.user);
