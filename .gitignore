@@ -57,6 +57,7 @@ typings/
 # gatsby files
 .cache/
 public
+dist
 
 # build files
 gatsby-types.d.ts
