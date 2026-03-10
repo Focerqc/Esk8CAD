@@ -154,7 +154,7 @@ export default ({ isHomepage }: NavbarProps) => {
                         background-color: #090a0b !important;
                         border: 1px solid #24282d !important;
                         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                        max-height: 800px !important;
+                        max-height: 400px !important;
                         overflow-y: auto !important;
                     }
                     .dropdown-menu::-webkit-scrollbar {
