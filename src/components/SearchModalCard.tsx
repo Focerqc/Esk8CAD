@@ -1,16 +1,15 @@
 import React from "react"
+import { Part } from "../util/parts"
 
 /**
  * Creates a {@link https://react-bootstrap.netlify.app/docs/components/link | React-Bootstrap Link}
- * with item information from an {@link ItemData}
- * or {@link ResourceData} object array. Intended
- * to be used in conjunction with the Array map
- * function.
+ * with item information from a {@link Part}
+ * or {@link ResourceData} object array.
  * 
- * @param item - an {@link ItemData} or {@link ResourceData} object
+ * @param item - a {@link Part} or {@link ResourceData} object
  * @param index - a number from a map
  */
-export default (item: ItemData | ResourceData, index: number) => {
+export default (item: Part | ResourceData, index: number) => {
     const getLinks = (d: string) => {
         let url = ""
 
@@ -54,22 +53,39 @@ export default (item: ItemData | ResourceData, index: number) => {
         return url ? (url + `?search=${encodeURIComponent(item.title)}`) : "#"
     }
 
+    // Determine categories to display (Platforms for parts, Type for resources)
+    const categories: string[] = [];
+    if ('typeOfResource' in item) {
+        categories.push(...item.typeOfResource);
+    } else {
+        if (item.brands?.name) categories.push(item.brands.name);
+        if (item.part_categories?.name) categories.push(item.part_categories.name);
+        
+        // Fallback to legacy arrays if joined data is missing
+        if (categories.length === 0) {
+            if (item.platform) categories.push(...item.platform);
+            if (item.type_of_part) categories.push(...item.type_of_part);
+        }
+    }
+
     return (
         <div
             className="searchableThing"
             style={{ display: "none" }}
             key={`search-modal-card-${index}`}>
             {item.title} <>(</>{
-                ((item as ItemData).platform ?? (item as ResourceData).typeOfResource)
-                    .map<React.ReactNode>((i) => (
-                        <a
-                            href={getLinks(i)}
-                            target="_self"
-                            key={`thing-card-${index}-${i}`}>
-                            {i}
-                        </a>
-                    ))
-                    .reduce((p, c) => [p, " | ", c])
+                categories.length > 0 ? (
+                    categories
+                        .map<React.ReactNode>((i) => (
+                            <a
+                                href={getLinks(i)}
+                                target="_self"
+                                key={`thing-card-${index}-${i}`}>
+                                {i}
+                            </a>
+                        ))
+                        .reduce((p, c) => [p, " | ", c])
+                ) : null
             }<>)</>
         </div>
     )

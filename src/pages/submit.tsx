@@ -755,8 +755,8 @@ const SubmitPage: React.FC = () => {
                     .part-form-card { background: #121417 !important; border: 1px solid #24282d !important; border-radius: 12px !important; overflow: hidden; }
                     .part-form-card .card-header { background: #1a1d20 !important; border-bottom: 1px solid #24282d !important; }
                     .input-contrast { 
-                        background-color: #0b0e14 !important; 
-                        border: 1px solid #24282d !important; 
+                        background-color: #16191d !important; 
+                        border: 1px solid #4a4f57 !important; 
                         color: #fff !important; 
                         border-radius: 8px !important;
                         transition: all 0.2s ease;
@@ -767,7 +767,7 @@ const SubmitPage: React.FC = () => {
                         box-shadow: 0 0 0 0.25rem rgba(0, 229, 255, 0.1) !important;
                         color: #fff !important;
                     }
-                    .input-contrast::placeholder { color: rgba(255,255,255,0.2) !important; }
+                    .input-contrast::placeholder { color: rgba(255,255,255,0.4) !important; }
                     
                     /* Force white text on form labels */
                     .form-label { color: #f8f9fa !important; }

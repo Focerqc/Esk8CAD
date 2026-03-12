@@ -13,7 +13,7 @@ export interface PartSchema {
     dropboxUrl?: string;
 }
 
-export const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
+const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
     const [imgError, setImgError] = useState(false);
 
     return (

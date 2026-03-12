@@ -28,19 +28,6 @@ export interface Part {
     created_at?: string;
 }
 
-export interface PartCategory {
-    id: string;
-    name: string;
-    description?: string;
-    created_at?: string;
-}
-
-export interface FabricationMethod {
-    id: string;
-    name: string;
-    description?: string;
-    created_at?: string;
-}
 
 export interface Brand {
     id: string;
@@ -101,6 +88,13 @@ export function getSupabaseClient(): SupabaseClient | null {
     return supabaseInstance;
 }
 
+interface PartCategory {
+    id: string;
+    name: string;
+    description?: string;
+    created_at?: string;
+}
+
 // Custom hook to fetch part categories
 export function usePartCategories() {
     const [categories, setCategories] = useState<PartCategory[]>([]);
@@ -150,51 +144,4 @@ export function usePartCategories() {
     return { categories, isLoading, error };
 }
 
-// Custom hook to fetch fabrication methods
-export function useFabricationMethods() {
-    const [methods, setMethods] = useState<FabricationMethod[]>([]);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let isMounted = true;
-
-        async function fetchMethods() {
-            try {
-                const supabase = getSupabaseClient();
-                if (!supabase) {
-                    throw new Error("Database connection not available.");
-                }
-
-                const { data, error: sbError } = await supabase
-                    .from('fabrication_methods')
-                    .select('*')
-                    .order('name', { ascending: true });
-
-                if (sbError) throw sbError;
-
-                if (isMounted) {
-                    setMethods(data as FabricationMethod[]);
-                    setError(null);
-                }
-            } catch (err: any) {
-                console.error("Error fetching fabrication methods:", err);
-                if (isMounted) {
-                    setError(err.message || "Database connection timed out - Retrying");
-                }
-            } finally {
-                if (isMounted) {
-                    setIsLoading(false);
-                }
-            }
-        }
-
-        fetchMethods();
-
-        return () => {
-            isMounted = false;
-        };
-    }, []);
-
-    return { methods, isLoading, error };
-}

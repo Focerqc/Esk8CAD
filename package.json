@@ -23,31 +23,25 @@
         "@hookform/resolvers": "^3.3.4",
         "@supabase/supabase-js": "^2.97.0",
         "bootstrap": "^5.3.3",
-        "dotenv": "^17.3.1",
-        "fslightbox-react": "^1.7.6",
-        "octokit": "^5.0.5",
         "react": "^18.2.0",
         "react-bootstrap": "^2.10.1",
         "react-dom": "^18.2.0",
         "react-hook-form": "^7.51.0",
-        "react-hot-toast": "^2.6.0",
         "react-icons": "^5.0.1",
         "react-router-dom": "^6.22.3",
-        "react-turnstile": "^1.1.5",
         "sass": "^1.79.6",
         "zod": "^3.22.4"
     },
     "devDependencies": {
         "@cloudflare/workers-types": "^4.20260214.0",
-        "@types/fslightbox-react": "^1.7.0",
-        "@types/node": "^20.19.33",
+        "@types/node": "^20.19.37",
         "@types/react": "^18.2.0",
         "@types/react-dom": "^18.2.0",
         "@vitejs/plugin-react": "^4.2.1",
-        "typescript": "^5.3.3",
+        "knip": "^5.86.0",
+        "typescript": "^5.9.3",
         "vite": "^5.1.4",
-        "vite-tsconfig-paths": "^4.3.1",
-        "vitest": "^1.3.1"
+        "vite-tsconfig-paths": "^4.3.1"
     },
     "overrides": {
         "@parcel/watcher": "~2.1.0"

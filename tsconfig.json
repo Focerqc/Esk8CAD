@@ -99,7 +99,6 @@
     },
     "include": [
         "./src/**/*",
-        "./functions/**/*",
         "./plugins/**/*"
     ]
 }

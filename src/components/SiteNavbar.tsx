@@ -4,10 +4,9 @@ import { Button, Container, Modal, Nav, Navbar, NavDropdown, Stack } from "react
 import { FaBars, FaMagnifyingGlass } from "react-icons/fa6"
 import SearchModalCard from "./SearchModalCard"
 import SearchModalSearchbar from "./SearchModalSearchbar"
-import allParts, { useParts } from "../util/parts"
+import { useParts, Part } from "../util/parts"
 import allResources from "../util/resources"
-import usePartRegistry from "../hooks/usePartRegistry"
-import { Part, getSupabaseClient } from "../lib/supabase"
+import { getSupabaseClient } from "../lib/supabase"
 import { useEffect } from "react"
 
 type NavPlatformDef = { label: string; href: string; divider?: never } | { divider: true; label?: never; href?: never };
@@ -46,19 +45,6 @@ type NavbarProps = {
     isHomepage?: boolean
 }
 
-const mapPartToItemData = (part: Part): ItemData => {
-    return {
-        id: part.id,
-        title: part.title,
-        typeOfPart: (part.type_of_part && part.type_of_part.length > 0 ? part.type_of_part : ["Miscellaneous"]) as PartType[],
-        fabricationMethod: (part.fabrication_method && part.fabrication_method.length > 0 ? part.fabrication_method : ["Other"]) as FabricationMethod[],
-        imageSrc: (Array.isArray(part.image_src) ? part.image_src[0] : part.image_src) || "",
-        platform: (part.platform && part.platform.length > 0 ? part.platform : ["Misc"]) as PlatformType[],
-        externalUrl: part.external_url || undefined,
-        dropboxZipLastUpdated: "",
-        isOem: part.is_oem
-    }
-}
 
 /**
  * Creates a {@link https://react-bootstrap.netlify.app/docs/components/navbar | React-Bootstrap Navbar}
@@ -68,7 +54,6 @@ const mapPartToItemData = (part: Part): ItemData => {
  */
 export default ({ isHomepage }: NavbarProps) => {
     const navigate = useNavigate();
-    const registryParts = usePartRegistry();
     const { parts: cloudParts } = useParts(); // Fetch live database parts
     const [showModal, setShowModal] = useState(false)
     const [isSpinning, setIsSpinning] = useState(false)
@@ -107,23 +92,8 @@ export default ({ isHomepage }: NavbarProps) => {
         return () => { isMounted = false; };
     }, []);
 
-    // Deduplicate parts by title (since JSON to Supabase migration could duplicate them)
-    const uniquePartsMap = new Map<string, ItemData>();
-
-    // Legacy static/JSON array merges
-    [...allParts, ...registryParts].forEach((p) => {
-        if (p.title) uniquePartsMap.set(p.title, p as ItemData);
-    });
-
-    // Cloud overrides/appends
-    cloudParts.map(mapPartToItemData).forEach((p) => {
-        if (p.title) uniquePartsMap.set(p.title, p);
-    });
-
-    const dedupedParts = Array.from(uniquePartsMap.values());
-
-    // Merge static and registry parts
-    const allPartsAndResources = [...dedupedParts, ...allResources].flat() as (ItemData | ResourceData)[]
+    // Merge Cloud Parts and Static Resources for search
+    const allPartsAndResources = [...cloudParts, ...allResources].flat() as (Part | ResourceData)[]
 
     const handleLogoClick = (e: React.MouseEvent) => {
         e.preventDefault();
@@ -154,7 +124,7 @@ export default ({ isHomepage }: NavbarProps) => {
                         background-color: #090a0b !important;
                         border: 1px solid #24282d !important;
                         box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-                        max-height: 400px !important;
+                        max-height: 700px !important;
                         overflow-y: auto !important;
                     }
                     .dropdown-menu::-webkit-scrollbar {
