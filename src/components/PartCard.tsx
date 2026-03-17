@@ -11,6 +11,11 @@ export interface PartSchema {
     tags: string[];
     externalUrl?: string;
     dropboxUrl?: string;
+    brands?: { name: string; slug: string } | null;
+    part_categories?: { name: string; slug: string } | null;
+    fabrication_methods?: { name: string; slug: string } | null;
+    models?: { name: string; slug: string } | null;
+    attributes?: Record<string, any> | null;
 }
 
 const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
@@ -61,19 +66,45 @@ const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
                         <Card.Title as="h5" className="mb-1 fw-bold text-white text-truncate" title={part.title}>
                             {part.title}
                         </Card.Title>
-                        <Card.Subtitle className="mb-3 text-muted small">
-                            By: <span className="text-light">{part.author || "Unknown"}</span>
+                        <Card.Subtitle className="mb-3 small">
+                            <span className="text-gray-400">By: {part.author || "Unknown"}</span>
                         </Card.Subtitle>
 
                         <div className="mb-3">
-                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{part.boardPlatform}</span>
+                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'visible' }}>
+                                {part.brands?.name || part.boardPlatform}
+                            </span>
                             <div className="d-flex flex-wrap gap-1">
-                                {part.tags.map((tag, i) => (
-                                    <Badge key={i} pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>
-                                        {tag}
+                                {part.models?.name && (
+                                    <Badge bg="primary" className="border border-primary py-1 px-1 rounded-md shadow-sm">
+                                        {part.models.name}
                                     </Badge>
-                                ))}
+                                )}
+                                {part.part_categories?.name && (
+                                    <Badge bg="secondary" className="border border-secondary py-1 px-1 rounded-md">
+                                        {part.part_categories.name}
+                                    </Badge>
+                                )}
+                                {part.fabrication_methods?.name && (
+                                    <Badge bg="dark" className="border border-secondary py-1 px-1 rounded-md text-info">
+                                        {part.fabrication_methods.name}
+                                    </Badge>
+                                )}
                             </div>
+
+                            {/* Dynamic Specifications (JSONB) */}
+                            {part.attributes && Object.keys(part.attributes).length > 0 && (
+                                <div className="d-flex flex-wrap gap-2 text-xs text-gray-400 mt-3">
+                                    {Object.entries(part.attributes).filter(([k]) => !k.endsWith('__unit')).slice(0, 4).map(([key, value]) => {
+                                        const unit = (part.attributes as any)[`${key}__unit`] || '';
+                                        return (
+                                            <span key={key} className="bg-slate-800/50 px-2 py-1 rounded">
+                                                {key}: {String(value)} {unit}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                         {/* Always anchor at bottom */}

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react"
-import { Container, Button, Form, Alert, Spinner, Image, Card, Row, Col, Badge, InputGroup } from "react-bootstrap"
+import React, { useState, useEffect, Dispatch, SetStateAction } from "react"
+import { Container, Button, Form, Alert, Spinner, Image, Card, Row, Col, Badge, InputGroup, OverlayTrigger, Popover } from "react-bootstrap"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -46,6 +46,7 @@ class AppErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundary
 interface Taxonomy {
     id: string;
     name: string;
+    template_fields?: any[] | null;
 }
 
 // --- Validation Schema ---
@@ -64,6 +65,7 @@ const partSchema = z.object({
     submittedBy: z.string().optional(),
     modelId: z.string().nullable().optional(), // Can be UUID or custom string
     needsModelReview: z.boolean().optional(),
+    attributes: z.record(z.any()).optional()
 })
 
 const formSchema = z.object({
@@ -83,7 +85,12 @@ const PartFormItem = ({
     setValue,
     platforms,
     categories,
-    fabricationMethods
+    fabricationMethods,
+    dimensionUnits,
+    setDimensionUnits,
+    dimensionTypes,
+    setDimensionTypes,
+    onUnsavedChange
 }: {
     index: number;
     control: any;
@@ -94,9 +101,31 @@ const PartFormItem = ({
     platforms: Taxonomy[];
     categories: Taxonomy[];
     fabricationMethods: Taxonomy[];
+    dimensionUnits: Record<string, 'in' | 'mm' | 'cm'>;
+    setDimensionUnits: Dispatch<SetStateAction<Record<string, 'in' | 'mm' | 'cm'>>>;
+    dimensionTypes: Record<string, 'text' | 'dimension'>;
+    setDimensionTypes: Dispatch<SetStateAction<Record<string, 'text' | 'dimension'>>>;
+    onUnsavedChange?: (hasUnsaved: boolean) => void;
 }) => {
     const [activeTab, setActiveTab] = useState<'category' | 'platform' | 'method' | null>(null)
     const [isScraping, setIsScraping] = useState(false)
+    const [showAllAttributes, setShowAllAttributes] = useState(false);
+    const [zoomedFields, setZoomedFields] = useState<Record<string, boolean>>({});
+    const [hasUnsavedHardware, setHasUnsavedHardware] = useState(false);
+
+    // New Custom Attribute local states
+    const [newCustomKey, setNewCustomKey] = useState("");
+    const [newCustomType, setNewCustomType] = useState<'text' | 'dimension'>("dimension");
+    const [newCustomUnit, setNewCustomUnit] = useState("mm");
+    const [newCustomValue, setNewCustomValue] = useState("");
+
+    // Report unsaved state to parent
+    useEffect(() => {
+        if (onUnsavedChange) {
+            const hasUnsavedCustomAttr = (newCustomKey.trim().length > 0 || newCustomValue.trim().length > 0);
+            onUnsavedChange(hasUnsavedCustomAttr || hasUnsavedHardware);
+        }
+    }, [newCustomKey, newCustomValue, hasUnsavedHardware, onUnsavedChange]);
 
     // Watch fields for this specific array item
     const partValues = watch(`parts.${index}`)
@@ -344,7 +373,11 @@ const PartFormItem = ({
                                         key={opt.id}
                                         bg={selectedCategoryId === opt.id ? "primary" : "none"}
                                         className="p-2 border border-light cursor-pointer shadow-sm"
-                                        onClick={() => setValue(`parts.${index}.categoryId`, opt.id, { shouldValidate: true })}
+                                        onClick={() => {
+                                            setValue(`parts.${index}.categoryId`, opt.id, { shouldValidate: true });
+                                            setValue(`parts.${index}.attributes`, {}); // Clear attributes when category changes
+                                            setZoomedFields({}); // Reset zoom states
+                                        }}
                                     >
                                         {opt.name}
                                     </Badge>
@@ -522,6 +555,246 @@ const PartFormItem = ({
                             </>
                         )}
                     </div>
+
+                    {/* Dynamic Attributes Block */}
+                    {(() => {
+                        const activeCategory = categories.find(c => c.id === selectedCategoryId);
+                        const templateFields = activeCategory?.template_fields;
+                        
+                        if (selectedCategoryId) {
+                            return (
+                                <div className="mt-4 p-4 rounded bg-black border border-secondary shadow-sm">
+                                    <h5 className="fw-bold text-light uppercase letter-spacing-1 mb-4">Attributes / Specifications</h5>
+                                    
+                                    {templateFields && templateFields.length > 0 && (() => {
+                                        const primaryFields = templateFields.filter((f: any) => f.is_primary);
+                                        const secondaryFields = templateFields.filter((f: any) => !f.is_primary);
+                                        
+                                        // If no fields are marked primary at all, treat them all as primary for this view
+                                        const visibleFields = primaryFields.length > 0 ? primaryFields : templateFields;
+                                        const hiddenFields = primaryFields.length > 0 ? secondaryFields : [];
+
+                                        const renderField = (fieldDef: any) => (
+                                            <div key={fieldDef.key} className="d-flex align-items-center justify-content-between py-2 border-bottom border-secondary border-opacity-10">
+                                                <div className="d-flex align-items-center gap-2">
+                                                    <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-0">
+                                                        {fieldDef.key} {fieldDef.unit ? <span className="text-primary">({fieldDef.unit})</span> : ''}
+                                                    </Form.Label>
+                                                </div>
+                                                <div className="d-flex align-items-center gap-3">
+                                                    <div style={{ width: fieldDef.type === 'dimension' ? '240px' : '180px' }} className="d-flex align-items-center">
+                                                        <Controller
+                                                            control={control}
+                                                            name={`parts.${index}.attributes.${fieldDef.key}` as any}
+                                                            render={({ field }) => (
+                                                                <div className="input-group input-group-sm">
+                                                                    <Form.Control
+                                                                        {...field}
+                                                                        type={(fieldDef.type === 'dimension') ? 'number' : 'text'}
+                                                                        step="any"
+                                                                        placeholder={fieldDef.placeholder || (fieldDef.type === 'dimension' ? "44" : "")}
+                                                                        value={field.value || ""}
+                                                                        className="input-contrast text-white p-2 shadow-sm border-secondary text-end"
+                                                                        style={{ borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                                                                    />
+                                                                    {fieldDef.type === 'dimension' && (
+                                                                        <Button 
+                                                                            variant="outline-secondary" 
+                                                                            size="sm" 
+                                                                            className="fw-bold extreme-small border-secondary border-start-0" 
+                                                                            style={{ minWidth: '40px', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, backgroundColor: 'transparent', color: '#06b6d4' }}
+                                                                            onClick={() => {
+                                                                                const current = dimensionUnits[`${index}-${fieldDef.key}`] || 'mm';
+                                                                                const next = current === 'mm' ? 'cm' : current === 'cm' ? 'in' : 'mm';
+                                                                                setDimensionUnits(prev => ({
+                                                                                    ...prev,
+                                                                                    [`${index}-${fieldDef.key}`]: next
+                                                                                }));
+                                                                            }}
+                                                                        >
+                                                                            {dimensionUnits[`${index}-${fieldDef.key}`] || 'mm'}
+                                                                        </Button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        />
+                                                    </div>
+                                                    {fieldDef.diagram_url ? (
+                                                        <div 
+                                                            className="rounded border border-secondary border-opacity-10 shadow-sm overflow-hidden d-flex align-items-center justify-content-center bg-white position-relative" 
+                                                            style={{ 
+                                                                width: zoomedFields[fieldDef.key] ? '240px' : '120px', 
+                                                                height: zoomedFields[fieldDef.key] ? '240px' : '120px', 
+                                                                flexShrink: 0,
+                                                                transition: 'all 0.2s ease-in-out',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            onClick={() => setZoomedFields(prev => ({ ...prev, [fieldDef.key]: !prev[fieldDef.key] }))}
+                                                            title="Click to toggle zoom"
+                                                        >
+                                                            <img 
+                                                                src={fieldDef.diagram_url} 
+                                                                alt="Guide" 
+                                                                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                                                            />
+                                                            <div 
+                                                                className="position-absolute bottom-0 end-0 p-1 opacity-0 hover-opacity-100 transition-opacity"
+                                                                style={{ backgroundColor: 'rgba(0,0,0,0.6)', pointerEvents: 'none' }}
+                                                            >
+                                                                <span className="text-white extreme-small fw-bold px-1">{zoomedFields[fieldDef.key] ? '×1' : '🔍'}</span>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ width: '120px', height: '120px' }} />
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+
+                                        return (
+                                            <div className="d-flex flex-column gap-1 mb-4">
+                                                {visibleFields.map(renderField)}
+                                                
+                                                {hiddenFields.length > 0 && (
+                                                    <div className="mt-2">
+                                                        {showAllAttributes && hiddenFields.map(renderField)}
+                                                        <Button 
+                                                            variant="link" 
+                                                            className="text-info extreme-small fw-bold text-decoration-none p-0 mt-2 opacity-75 hover-opacity-100"
+                                                            onClick={() => setShowAllAttributes(!showAllAttributes)}
+                                                        >
+                                                            {showAllAttributes ? '↑ HIDE OPTIONAL FIELDS' : `↓ EXPAND FULL LIST OF ${categories.find(c => c.id === selectedCategoryId)?.name.toUpperCase() || 'PART'} ATTRIBUTES`}
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                    
+                                    <div className={templateFields && templateFields.length > 0 ? "pt-4 border-top border-secondary mt-2" : ""}>
+                                        <h6 className="fw-bold text-light small uppercase opacity-75 mb-2">Custom Attributes</h6>
+                                        <p className="small text-muted mb-3 opacity-50 text-wrap">Add any specifications that don't fit the category templates.</p>
+                                        <Controller
+                                            control={control}
+                                            name={`parts.${index}.attributes` as any}
+                                            render={({ field }) => {
+                                                const currentAttrs = field.value || {};
+                                                const customKeys = Object.keys(currentAttrs).filter(k => !(templateFields || []).find((tf: any) => tf.key === k));
+                                                return (
+                                                    <div className="d-flex flex-column gap-2 mb-2">
+                                                        {customKeys.map(k => {
+                                                            const isDim = dimensionTypes[`${index}-${k}`] === 'dimension';
+                                                            const unit = dimensionUnits[`${index}-${k}`] || ''; // Default to empty string if no unit
+                                                            return (
+                                                                <div key={k} className="bg-secondary bg-opacity-10 p-2 rounded d-flex justify-content-between align-items-center border border-secondary border-opacity-25 shadow-sm mb-1">
+                                                                    <div className="d-flex align-items-center gap-3">
+                                                                        <Badge bg={isDim ? "info" : "secondary"} className={`${isDim ? 'text-dark' : 'text-light'} extreme-small px-2 py-1`}>{isDim ? 'DIMENSION' : 'OTHER UNITS'}</Badge>
+                                                                        <span className="text-white small fw-bold">{k}:</span>
+                                                                        <span className="text-info small">{currentAttrs[k]} {unit && <span className="text-muted ms-1 italic" style={{ fontSize: '0.7rem' }}>{unit}</span>}</span>
+                                                                    </div>
+                                                                    <Button variant="link" className="text-danger p-0 px-2 text-decoration-none fw-bold hover-opacity-100 opacity-50" onClick={() => {
+                                                                        const newAttrs = { ...currentAttrs };
+                                                                        delete newAttrs[k];
+                                                                        field.onChange(newAttrs);
+                                                                    }}>×</Button>
+                                                                </div>
+                                                            );
+                                                        })}
+
+                                                        <div className="p-3 bg-black bg-opacity-25 rounded border border-secondary border-opacity-25 mt-2 shadow-sm">
+                                                            <h6 className="text-info extreme-small fw-bold text-uppercase mb-3 italic">Add Custom Specification</h6>
+                                                            <Row className="g-2">
+                                                                <Col md={3}>
+                                                                    <Form.Control 
+                                                                        placeholder="Key (e.g. Weight)" 
+                                                                        className="input-contrast p-2 small border-secondary" 
+                                                                        value={newCustomKey}
+                                                                        onChange={e => setNewCustomKey(e.target.value)}
+                                                                    />
+                                                                </Col>
+                                                                <Col md={3}>
+                                                                    <Form.Select 
+                                                                        className="input-contrast p-2 small border-secondary"
+                                                                        value={newCustomType}
+                                                                        onChange={e => {
+                                                                            const val = e.target.value as 'text' | 'dimension';
+                                                                            setNewCustomType(val);
+                                                                            if (val === 'text') setNewCustomUnit("" as any);
+                                                                        }}
+                                                                    >
+                                                                        <option value="dimension">Dimension</option>
+                                                                        <option value="text">Other Units</option>
+                                                                    </Form.Select>
+                                                                </Col>
+                                                                <Col md={2} className="position-relative">
+                                                                    {newCustomType === 'dimension' && (
+                                                                        <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', zIndex: 10 }}>
+                                                                            {['mm', 'cm', 'in'].map(u => (
+                                                                                <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewCustomUnit(u)}>{u}</Badge>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                    {newCustomType === 'text' && (
+                                                                        <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', width: 'max-content', zIndex: 10 }}>
+                                                                            {['kg', 'lb', 'V', 'Wh', 'kv', 'T'].map(u => (
+                                                                                <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewCustomUnit(u)}>{u}</Badge>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                    <Form.Control 
+                                                                        placeholder="Unit" 
+                                                                        className="input-contrast p-2 small border-secondary text-center" 
+                                                                        value={newCustomUnit}
+                                                                        onChange={e => setNewCustomUnit(e.target.value as any)}
+                                                                    />
+                                                                </Col>
+                                                                <Col md={3}>
+                                                                    <InputGroup size="sm">
+                                                                        <Form.Control 
+                                                                            type={newCustomType === 'dimension' ? "number" : "text"}
+                                                                            step="any"
+                                                                            placeholder="Value..." 
+                                                                            className="input-contrast p-2 small border-secondary text-end" 
+                                                                            value={newCustomValue}
+                                                                            onChange={e => setNewCustomValue(e.target.value)}
+                                                                            style={(newCustomType === 'dimension' || newCustomUnit) ? { borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}}
+                                                                        />
+                                                                        {(newCustomType === 'dimension' || newCustomUnit) && (
+                                                                            <InputGroup.Text className="input-contrast border-secondary border-start-0 text-info opacity-75 extreme-small fw-bold" style={{ backgroundColor: 'transparent' }}>
+                                                                                {newCustomUnit || (newCustomType === 'dimension' ? 'mm' : '')}
+                                                                            </InputGroup.Text>
+                                                                        )}
+                                                                    </InputGroup>
+                                                                </Col>
+                                                                <Col md={2}>
+                                                                    <Button 
+                                                                        variant="info" 
+                                                                        className="w-100 fw-bold small py-2 shadow-sm"
+                                                                        onClick={() => {
+                                                                            if (newCustomKey.trim() && newCustomValue.trim()) {
+                                                                                setDimensionTypes(prev => ({ ...prev, [`${index}-${newCustomKey.trim()}`]: newCustomType }));
+                                                                                if (newCustomType === 'dimension') {
+                                                                                    setDimensionUnits(prev => ({ ...prev, [`${index}-${newCustomKey.trim()}`]: newCustomUnit as any }));
+                                                                                }
+                                                                                field.onChange({ ...currentAttrs, [newCustomKey.trim()]: newCustomValue.trim() });
+                                                                                setNewCustomKey("");
+                                                                                setNewCustomValue("");
+                                                                            }
+                                                                        }}
+                                                                    >ADD</Button>
+                                                                </Col>
+                                                            </Row>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
                 </div>
 
                 {/* 5. Additional / Minor Selectors */}
@@ -553,6 +826,7 @@ const PartFormItem = ({
                     needsModelReview={needsModelReviewValue}
                     onChangeModel={(m) => setValue(`parts.${index}.modelId`, m, { shouldValidate: true })}
                     onChangeNeedsReview={(b) => setValue(`parts.${index}.needsModelReview`, b, { shouldValidate: true })}
+                    onUnsavedChange={(val) => setHasUnsavedHardware(val)}
                 />
             </Card.Body>
         </Card>
@@ -568,10 +842,13 @@ const SubmitPage: React.FC = () => {
     const [categories, setCategories] = useState<Taxonomy[]>([])
     const [fabricationMethods, setFabricationMethods] = useState<Taxonomy[]>([])
     const [isTaxonomyLoading, setIsTaxonomyLoading] = useState(true)
+    const [dimensionUnits, setDimensionUnits] = useState<Record<string, 'in' | 'mm' | 'cm'>>({})
+    const [dimensionTypes, setDimensionTypes] = useState<Record<string, 'text' | 'dimension'>>({})
 
     // Setup React Hook Form native integration
     const { control, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
         resolver: zodResolver(formSchema),
+        mode: "onChange",
         defaultValues: {
             honeypot: "", // Empty to start
             parts: [{
@@ -588,7 +865,8 @@ const SubmitPage: React.FC = () => {
                 author: "",
                 submittedBy: "",
                 modelId: null,
-                needsModelReview: false
+                needsModelReview: false,
+                attributes: {}
             }]
         }
     })
@@ -609,7 +887,7 @@ const SubmitPage: React.FC = () => {
             }
             try {
                 const { data: pData } = await client.from('brands').select('id, name').order('name');
-                const { data: catData } = await client.from('part_categories').select('id, name').order('name');
+                const { data: catData } = await client.from('part_categories').select('id, name, template_fields').order('name');
                 const { data: fData } = await client.from('fabrication_methods').select('id, name').order('name');
                 if (isMounted) {
                     if (pData && pData.length > 0) setPlatforms(pData);
@@ -648,7 +926,8 @@ const SubmitPage: React.FC = () => {
             const processedParts = [];
 
             // Parallel individual processing in case of new models
-            for (const p of data.parts) {
+            for (let i = 0; i < data.parts.length; i++) {
+                const p = data.parts[i];
                 let finalModelId = p.modelId;
 
                 // Handle New Board Model Insertion
@@ -703,6 +982,56 @@ const SubmitPage: React.FC = () => {
                     model_id: (finalModelId && finalModelId.length === 36) ? finalModelId : null,
                     board_model: (!finalModelId || finalModelId.length !== 36) ? finalModelId : null,
                     needs_model_review: p.needsModelReview || false,
+                    attributes: (() => {
+                        const attrs = { ...(p.attributes || {}) };
+                        const activeCat = categories.find(c => c.id === p.categoryId);
+                        if (activeCat?.template_fields) {
+                            activeCat.template_fields.forEach((tf: any) => {
+                                if (tf.type === 'dimension') {
+                                    const unit = dimensionUnits[`${i}-${tf.key}`] || 'mm';
+                                    const val = attrs[tf.key];
+                                    if (val) {
+                                        const numVal = parseFloat(val);
+                                        if (unit === 'in') {
+                                            attrs[tf.key] = (numVal * 25.4).toString();
+                                        } else if (unit === 'cm') {
+                                            attrs[tf.key] = (numVal * 10).toString();
+                                        }
+                                        attrs[`${tf.key}__unit`] = 'mm'; // Normalized to mm
+                                    }
+                                } else if (tf.unit) {
+                                    // Non-dimension template field with a fixed unit
+                                    attrs[`${tf.key}__unit`] = tf.unit;
+                                }
+                            });
+                        }
+
+                        // Also normalize custom attributes that are marked as dimensions or have custom units
+                        Object.keys(p.attributes || {}).forEach(k => {
+                            const isTemplateField = activeCat?.template_fields?.find((tf: any) => tf.key === k);
+                            if (!isTemplateField) {
+                                // It's a custom attribute
+                                const unit = dimensionUnits[`${i}-${k}`] || '';
+                                const type = dimensionTypes[`${i}-${k}`];
+                                const val = attrs[k];
+
+                                if (val) {
+                                    if (type === 'dimension') {
+                                        const numVal = parseFloat(val);
+                                        if (unit === 'in') {
+                                            attrs[k] = (numVal * 25.4).toString();
+                                        } else if (unit === 'cm') {
+                                            attrs[k] = (numVal * 10).toString();
+                                        }
+                                        attrs[`${k}__unit`] = 'mm';
+                                    } else if (unit) {
+                                        attrs[`${k}__unit`] = unit;
+                                    }
+                                }
+                            }
+                        });
+                        return attrs;
+                    })(),
                     status: 'pending'
                 });
             }
@@ -724,7 +1053,8 @@ const SubmitPage: React.FC = () => {
                     id: Math.random().toString(36).substr(2, 9),
                     url: "", externalUrl: "", title: "", imageSrc: "", platformId: "",
                     categoryId: "", fabricationMethodId: "", dropboxUrl: "", isOem: false,
-                    author: "", submittedBy: "", modelId: null, needsModelReview: false
+                    author: "", submittedBy: "", modelId: null, needsModelReview: false,
+                    attributes: {}
                 }]
             });
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -743,6 +1073,8 @@ const SubmitPage: React.FC = () => {
         setMessage("Please fix the validation errors in the form before submitting.");
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+
+    const [unsavedMap, setUnsavedMap] = useState<Record<string, boolean>>({});
 
     const isSuccessState = status === 'success';
     const isErrorState = status === 'error';
@@ -779,6 +1111,7 @@ const SubmitPage: React.FC = () => {
                     .shadow-inner { box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.5) !important; }
                     .border-dashed { border-style: dashed !important; border-width: 2px !important; border-color: #24282d !important; }
                     .border-dashed:hover { border-color: #00e5ff !important; background: rgba(0,229,255,0.02) !important; }
+                    .extreme-small { font-size: 0.65rem; }
                 `}} />
                 <SiteMetaData title="ESK8CAD/Submit" />
                 <SiteNavbar />
@@ -839,6 +1172,11 @@ const SubmitPage: React.FC = () => {
                                                 platforms={platforms}
                                                 categories={categories}
                                                 fabricationMethods={fabricationMethods}
+                                                dimensionUnits={dimensionUnits}
+                                                setDimensionUnits={setDimensionUnits}
+                                                dimensionTypes={dimensionTypes}
+                                                setDimensionTypes={setDimensionTypes}
+                                                onUnsavedChange={(val) => setUnsavedMap(prev => ({ ...prev, [field.id]: val }))}
                                             />
                                         ))}
 
@@ -852,12 +1190,23 @@ const SubmitPage: React.FC = () => {
                                                         id: Math.random().toString(36).substr(2, 9),
                                                         url: "", externalUrl: "", title: "", imageSrc: "", platformId: "",
                                                         categoryId: "", fabricationMethodId: "", dropboxUrl: "", isOem: false,
-                                                        author: "", submittedBy: "", modelId: null, needsModelReview: false
+                                                        author: "", submittedBy: "", modelId: null, needsModelReview: false,
+                                                        attributes: {}
                                                     })}
                                                     disabled={status === 'submitting'}
                                                 >
                                                     + Attach Another Link
                                                 </Button>
+                                            )}
+
+                                            {Object.values(unsavedMap).some(v => v) && (
+                                                <Alert variant="warning" className="mb-0 bg-transparent border-warning text-warning d-flex align-items-center gap-3 shadow-sm">
+                                                    <div className="fs-4">⚠️</div>
+                                                    <div>
+                                                        <strong className="d-block">Unsaved Specifications Detected</strong>
+                                                        <span className="small opacity-75">You have text in an "Add" field that hasn't been saved yet. Click the <strong>Add</strong> button next to the input before submitting.</span>
+                                                    </div>
+                                                </Alert>
                                             )}
 
                                             <Button

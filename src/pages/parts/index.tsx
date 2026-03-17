@@ -28,22 +28,6 @@ const Page: React.FC<any> = () => {
 
         let platformName = brandParam;
 
-        // Restore styling if it's an encoded slug from the relational update links
-        if (brandParam && brandParam === brandParam.toLowerCase() && !brandParam.includes(" ")) {
-            const lowerParam = brandParam.toLowerCase();
-            if (lowerParam === "meepo") platformName = "Meepo";
-            else if (lowerParam === "newbee") platformName = "Newbee";
-            else if (lowerParam === "acedeck") platformName = "Acedeck";
-            else if (lowerParam === "3dservisas") platformName = "3D Servisas";
-            else if (lowerParam === "mbs") platformName = "MBS";
-            else {
-                platformName = brandParam.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-            }
-        }
-
-        // If no brand but has category, we set platform name to the category for the title
-        const displayName = platformName || (activeCategory ? activeCategory.charAt(0).toUpperCase() + activeCategory.slice(1) : "");
-
         setActivePlatform(platformName);
         setHasPlatformParam(true);
     }, [routeBrand, routeCategory]);

@@ -9,9 +9,19 @@ import { getSupabaseClient, Part, Brand, Model } from "../lib/supabase"
 import { SupabaseClient, User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { useBoardHook } from "../hooks/useBoardHook"
 
+interface CategoryTemplateField {
+    key: string;
+    type: 'text' | 'dimension';
+    unit?: string;
+    placeholder?: string;
+    diagram_url?: string;
+    is_primary?: boolean;
+}
+
 interface Taxonomy {
     id: string;
     name: string;
+    template_fields?: CategoryTemplateField[];
 }
 
 const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.ReactNode, onEdit: () => void }) => {
@@ -46,19 +56,55 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
                                 {part.title}
                             </Card.Title>
                         </div>
-                        <Card.Subtitle className="mb-3 text-muted small">
-                            By: <span className="text-light">{author}</span>
+                        <Card.Subtitle className="mb-3 small">
+                            <span className="text-gray-400">By: {author}</span>
                         </Card.Subtitle>
 
                         <div className="mb-3">
-                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1">{(part as any).brands?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "No Platform")}</span>
+                            <span className="text-info fw-bold small me-2 d-block mb-2 text-uppercase letter-spacing-1" style={{ fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'visible' }}>
+                                {(part as any).brands?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "No Platform")}
+                            </span>
                             <div className="d-flex flex-wrap gap-1">
-                                {(part as any).hardware_models?.name && <Badge pill bg="light" text="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{(part as any).hardware_models?.name}</Badge>}
-                                {part.board_model && !((part as any).hardware_models?.name) && <Badge pill bg="warning" text="dark" className="border border-dark py-1 px-2 text-truncate" style={{ maxWidth: '150px' }} title="Pending Model Creation">🚩 {part.board_model}</Badge>}
-                                {(part as any).part_categories?.name && <Badge pill bg="secondary" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{(part as any).part_categories?.name}</Badge>}
-                                {(part as any).fabrication_methods?.name && <Badge pill bg="dark" className="border border-secondary py-1 px-2 text-truncate" style={{ maxWidth: '150px' }}>{(part as any).fabrication_methods?.name}</Badge>}
-                                {part.is_oem && <Badge pill bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-1 px-2">OEM</Badge>}
+                                {(part as any).hardware_models?.name && (
+                                    <Badge bg="primary" className="border border-primary py-1 px-1 rounded-md shadow-sm">
+                                        {(part as any).hardware_models?.name}
+                                    </Badge>
+                                )}
+                                {part.board_model && !((part as any).hardware_models?.name) && (
+                                    <Badge bg="warning" text="dark" className="border border-dark py-1 px-1 rounded-md" title="Pending Model Creation">
+                                        🚩 {part.board_model}
+                                    </Badge>
+                                )}
+                                {(part as any).part_categories?.name && (
+                                    <Badge bg="secondary" className="border border-secondary py-1 px-1 rounded-md">
+                                        {(part as any).part_categories?.name}
+                                    </Badge>
+                                )}
+                                {(part as any).fabrication_methods?.name && (
+                                    <Badge bg="dark" className="border border-secondary py-1 px-1 rounded-md text-info">
+                                        {(part as any).fabrication_methods?.name}
+                                    </Badge>
+                                )}
+                                {part.is_oem && (
+                                    <Badge bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-1 px-1 rounded-md">
+                                        OEM
+                                    </Badge>
+                                )}
                             </div>
+
+                            {/* Dynamic Specifications (JSONB) */}
+                            {part.attributes && Object.keys(part.attributes).length > 0 && (
+                                <div className="d-flex flex-wrap gap-2 text-xs text-gray-400 mt-3">
+                                    {Object.entries(part.attributes || {}).filter(([k]) => !k.endsWith('__unit')).slice(0, 4).map(([key, value]) => {
+                                        const unit = (part.attributes as any)[`${key}__unit`] || '';
+                                        return (
+                                            <span key={key} className="bg-slate-800/50 px-2 py-1 rounded">
+                                                {key}: {String(value)} {unit}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
 
                         <div className="mt-auto pt-3 border-top border-secondary">
@@ -129,6 +175,15 @@ export default function AdminPage() {
     const [showAddModel, setShowAddModel] = useState(false);
     const [newModelBrand, setNewModelBrand] = useState<string>("");
     const [newModelName, setNewModelName] = useState<string>("");
+    
+    // Category Template State
+    const [newTemplateKey, setNewTemplateKey] = useState("");
+    const [newTemplateType, setNewTemplateType] = useState<'text' | 'dimension'>("dimension");
+    const [newTemplateUnit, setNewTemplateUnit] = useState("");
+    const [newTemplatePlaceholder, setNewTemplatePlaceholder] = useState("");
+    const [newTemplateDiagramUrl, setNewTemplateDiagramUrl] = useState("");
+    const [newTemplateIsPrimary, setNewTemplateIsPrimary] = useState(false);
+    const [editingTemplateFieldIndex, setEditingTemplateFieldIndex] = useState<number | null>(null);
 
     // Tab 6 & 7 Refactor States
     const [editingBrandAdmin, setEditingBrandAdmin] = useState<Brand | null>(null);
@@ -155,6 +210,12 @@ export default function AdminPage() {
         refresh: refreshBoardData
     } = useBoardHook();
 
+    // Audit State
+    const [missingBrands, setMissingBrands] = useState<Brand[]>([]);
+    const [missingModels, setMissingModels] = useState<any[]>([]);
+    const [missingAttributes, setMissingAttributes] = useState<{ categoryName: string, fieldKey: string }[]>([]);
+    const [isAuditLoading, setIsAuditLoading] = useState(false);
+
     const [isActionLoading, setIsActionLoading] = useState(false);
 
     const [isLoading, setIsLoading] = useState(false);
@@ -164,6 +225,13 @@ export default function AdminPage() {
     const [editingPart, setEditingPart] = useState<Part | null>(null);
     const [isSavingEdit, setIsSavingEdit] = useState(false);
     const [registrySearchText, setRegistrySearchText] = useState("");
+    const [selectedAttributeCategory, setSelectedAttributeCategory] = useState<string>("");
+    
+    // Attribute Merge Modal State
+    const [showAttributeMergeModal, setShowAttributeMergeModal] = useState(false);
+    const [targetAttributeKey, setTargetAttributeKey] = useState("");
+    const [newAttributeKey, setNewAttributeKey] = useState("");
+    const [isMergingAttributes, setIsMergingAttributes] = useState(false);
 
     // Detect Tab from URL
     const [activeTab, setActiveTab] = useState('queue');
@@ -188,6 +256,62 @@ export default function AdminPage() {
         }
     }, [activeTab]);
 
+    // Default Attribute Category selection
+    useEffect(() => {
+        if (partCategories.length > 0 && !selectedAttributeCategory) {
+            setSelectedAttributeCategory(partCategories[0].id);
+        }
+    }, [partCategories, selectedAttributeCategory]);
+
+    const fetchAuditData = async () => {
+        if (!supabase) return;
+        setIsAuditLoading(true);
+        try {
+            // 1. Brands missing description or image
+            const { data: bData } = await supabase
+                .from('brands')
+                .select('*')
+                .or('description.is.null,image_url.is.null')
+                .order('name');
+            setMissingBrands(bData || []);
+
+            // 2. Models missing description or image
+            const { data: mData } = await supabase
+                .from('models')
+                .select('*, brands(name)')
+                .or('description.is.null,image_url.is.null')
+                .order('name');
+            setMissingModels(mData || []);
+
+            // 3. Attributes missing diagrams
+            const missingAttrs: { categoryName: string, fieldKey: string }[] = [];
+            partCategories.forEach(cat => {
+                if (cat.template_fields) {
+                    cat.template_fields.forEach((tf: any) => {
+                        if (!tf.diagram_url) {
+                            missingAttrs.push({
+                                categoryName: cat.name,
+                                fieldKey: tf.key
+                            });
+                        }
+                    });
+                }
+            });
+            setMissingAttributes(missingAttrs);
+
+        } catch (err: any) {
+            console.error("Audit fetch failed", err);
+        } finally {
+            setIsAuditLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === 'missing' && user) {
+            fetchAuditData();
+        }
+    }, [activeTab, user]);
+
 
     const handleSaveEdit = async () => {
         if (!supabase || !editingPart || !editingPart.id) return;
@@ -205,6 +329,7 @@ export default function AdminPage() {
                 platform_id: editingPart.platform_id || null, // Capture UUID
                 category_id: editingPart.category_id || null, // Capture UUID
                 fabrication_method_id: editingPart.fabrication_method_id || null, // Capture UUID
+                attributes: editingPart.attributes || null,
                 model_id: (editingPart.model_id && editingPart.model_id.length === 36) ? editingPart.model_id : null,
                 board_model: (!editingPart.model_id || editingPart.model_id.length !== 36) ? editingPart.model_id : null,
                 is_oem: editingPart.is_oem || false,
@@ -266,6 +391,25 @@ export default function AdminPage() {
         });
         return Array.from(ghostMap.values()).sort((a, b) => a.brand_name.localeCompare(b.brand_name) || a.model_name.localeCompare(b.model_name));
     }, [allActiveParts, brands]);
+
+    // Attribute Dictionary Aggregation
+    const attributeDictionary = useMemo(() => {
+        if (!selectedAttributeCategory) return [];
+        const counts: Record<string, number> = {};
+        const allParts = [...parts, ...hiddenParts, ...deletedParts].filter(p => p.category_id === selectedAttributeCategory);
+        
+        allParts.forEach(p => {
+            if (p.attributes && typeof p.attributes === 'object') {
+                Object.keys(p.attributes).forEach(key => {
+                    counts[key] = (counts[key] || 0) + 1;
+                });
+            }
+        });
+
+        return Object.entries(counts)
+            .map(([key, count]) => ({ key, count }))
+            .sort((a, b) => b.count - a.count);
+    }, [parts, hiddenParts, deletedParts, selectedAttributeCategory]);
 
     // Initial mount and client library check
     useEffect(() => {
@@ -635,9 +779,13 @@ export default function AdminPage() {
     const handleUpdatePartCategory = async () => {
         if (!selectedPartCategory || !editPartCategoryName.trim() || !supabase) return;
         try {
-            const { error: sbError } = await supabase.from('part_categories').update({ name: editPartCategoryName.trim() }).eq('id', selectedPartCategory.id);
+            const payload = { 
+                name: editPartCategoryName.trim(),
+                template_fields: selectedPartCategory.template_fields || [] 
+            };
+            const { error: sbError } = await supabase.from('part_categories').update(payload).eq('id', selectedPartCategory.id);
             if (sbError) throw sbError;
-            setPartCategories(prev => prev.map(c => c.id === selectedPartCategory.id ? { ...c, name: editPartCategoryName.trim() } : c).sort((a, b) => a.name.localeCompare(b.name)));
+            setPartCategories(prev => prev.map(c => c.id === selectedPartCategory.id ? { ...c, ...payload } : c).sort((a, b) => a.name.localeCompare(b.name)));
             setSelectedPartCategory(null);
             setEditPartCategoryName("");
         } catch (err: any) {
@@ -657,6 +805,66 @@ export default function AdminPage() {
         } catch (err: any) {
             setError('Failed to delete category: ' + (err.message || String(err)));
             fetchData();
+        }
+    };
+
+    const handleAddTemplateField = () => {
+        if (!newTemplateKey.trim()) return;
+        const newField: CategoryTemplateField = {
+            key: newTemplateKey.trim(),
+            type: newTemplateType,
+            unit: newTemplateUnit.trim() || undefined,
+            placeholder: newTemplatePlaceholder.trim() || undefined,
+            diagram_url: newTemplateDiagramUrl.trim() || undefined,
+            is_primary: newTemplateIsPrimary
+        };
+        
+        if (selectedPartCategory) {
+            const updatedFields = [...(selectedPartCategory.template_fields || [])];
+            if (editingTemplateFieldIndex !== null) {
+                updatedFields[editingTemplateFieldIndex] = newField;
+            } else {
+                updatedFields.push(newField);
+            }
+            setSelectedPartCategory({ ...selectedPartCategory, template_fields: updatedFields });
+            // Reset form
+            setNewTemplateKey("");
+            setNewTemplateType("dimension");
+            setNewTemplateUnit("");
+            setNewTemplatePlaceholder("");
+            setNewTemplateDiagramUrl("");
+            setNewTemplateIsPrimary(false);
+            setEditingTemplateFieldIndex(null);
+        }
+    };
+
+    const handleEditTemplateField = (index: number) => {
+        if (selectedPartCategory && selectedPartCategory.template_fields) {
+            const field = selectedPartCategory.template_fields[index];
+            setNewTemplateKey(field.key);
+            setNewTemplateType(field.type);
+            setNewTemplateUnit(field.unit || "");
+            setNewTemplatePlaceholder(field.placeholder || "");
+            setNewTemplateDiagramUrl(field.diagram_url || "");
+            setNewTemplateIsPrimary(!!field.is_primary);
+            setEditingTemplateFieldIndex(index);
+        }
+    };
+
+    const handleCancelTemplateEdit = () => {
+        setNewTemplateKey("");
+        setNewTemplateType("dimension");
+        setNewTemplateUnit("");
+        setNewTemplatePlaceholder("");
+        setNewTemplateDiagramUrl("");
+        setNewTemplateIsPrimary(false);
+        setEditingTemplateFieldIndex(null);
+    };
+
+    const handleRemoveTemplateField = (index: number) => {
+        if (selectedPartCategory && selectedPartCategory.template_fields) {
+            const updatedFields = selectedPartCategory.template_fields.filter((_, i) => i !== index);
+            setSelectedPartCategory({ ...selectedPartCategory, template_fields: updatedFields });
         }
     };
 
@@ -745,6 +953,58 @@ export default function AdminPage() {
             setError('Failed to update model: ' + err.message);
         } finally {
             setIsModelSaving(false);
+        }
+    };
+
+    const handleMergeAttributes = async () => {
+        if (!supabase || !targetAttributeKey || !newAttributeKey.trim()) return;
+        setIsMergingAttributes(true);
+        try {
+            const normalizedNewKey = newAttributeKey.trim();
+            
+            // 1. Get scope of parts to update
+            let partsToUpdate = [...parts, ...hiddenParts, ...deletedParts];
+            if (selectedAttributeCategory) {
+                partsToUpdate = partsToUpdate.filter(p => p.category_id === selectedAttributeCategory);
+            }
+
+            // Filter down to only those that actually have the key
+            const relevantParts = partsToUpdate.filter(p => p.attributes && (p.attributes as any)[targetAttributeKey] !== undefined);
+
+            if (relevantParts.length === 0) {
+                alert("No parts found with this attribute key in the current scope.");
+                return;
+            }
+
+            // 2. Process updates sequentially
+            for (const part of relevantParts) {
+                const newAttributes = { ...(part.attributes as any) };
+                const value = newAttributes[targetAttributeKey];
+                newAttributes[normalizedNewKey] = value;
+                delete newAttributes[targetAttributeKey];
+
+                const { error: updateError } = await supabase
+                    .from('parts')
+                    .update({ attributes: newAttributes })
+                    .eq('id', part.id);
+
+                if (updateError) throw updateError;
+            }
+
+            // 3. Cleanup and Refresh
+            setShowAttributeMergeModal(false);
+            setTargetAttributeKey("");
+            setNewAttributeKey("");
+            // Refresh counts
+            fetchData();
+            fetchHiddenData();
+            fetchDeletedData();
+            alert(`Successfully merged '${targetAttributeKey}' into '${normalizedNewKey}' across ${relevantParts.length} parts.`);
+
+        } catch (err: any) {
+            setError('Failed to merge attributes: ' + (err.message || String(err)));
+        } finally {
+            setIsMergingAttributes(false);
         }
     };
 
@@ -900,7 +1160,6 @@ export default function AdminPage() {
     if (!supabase) {
         return (
             <div className="bg-black text-light min-vh-100 d-flex flex-column">
-                <GlobalStyles />
                 <SiteNavbar />
                 <Container className="flex-grow-1 d-flex align-items-center justify-content-center">
                     <Alert variant="danger" className="text-center shadow-lg p-5 w-100" style={{ maxWidth: '600px' }}>
@@ -930,7 +1189,6 @@ export default function AdminPage() {
     if (!user) {
         return (
             <div className="bg-black text-light min-vh-100 d-flex flex-column">
-                <GlobalStyles />
                 <SiteNavbar />
                 <Container className="flex-grow-1 d-flex align-items-center justify-content-center">
                     <Card className="bg-dark text-white border-secondary shadow-lg p-4" style={{ maxWidth: '400px', width: '100%' }}>
@@ -983,6 +1241,7 @@ export default function AdminPage() {
                 .letter-spacing-1 { letter-spacing: 0.1em; }
                 .letter-spacing-2 { letter-spacing: 0.2em; }
                 .italic { font-style: italic; }
+                .extreme-small { font-size: 0.65rem; }
                 
                 /* Admin Preview Scaling - Balanced for XL Modal */
                 .admin-preview-scaler { transform: scale(1); transform-origin: top center; width: 100%; margin-top: 2rem; }
@@ -1149,9 +1408,130 @@ export default function AdminPage() {
                                         <div className="d-flex flex-column gap-3">
                                             <InputGroup className="w-100 shadow-sm border border-secondary rounded overflow-hidden">
                                                 <Form.Control type="text" className="input-contrast p-3 border-0" value={editPartCategoryName} onChange={e => setEditPartCategoryName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleUpdatePartCategory()} />
-                                                <Button variant="success" className="fw-bold px-4 border-0" onClick={handleUpdatePartCategory} disabled={editPartCategoryName.trim() === selectedPartCategory.name || !editPartCategoryName.trim()}>Save Name</Button>
+                                                <Button variant="success" className="fw-bold px-4 border-0" onClick={handleUpdatePartCategory} disabled={(editPartCategoryName.trim() === (partCategories.find(c => c.id === selectedPartCategory.id)?.name) && JSON.stringify(selectedPartCategory.template_fields || []) === JSON.stringify(partCategories.find(c => c.id === selectedPartCategory.id)?.template_fields || [])) || editPartCategoryName.trim() === ""}>Save Category Settings</Button>
                                             </InputGroup>
-                                            <div className="d-flex justify-content-between">
+
+                                            <hr className="border-secondary opacity-25 my-2" />
+
+                                            <div className="template-manager">
+                                                <h6 className="text-white small fw-bold text-uppercase letter-spacing-1 mb-3">Manage Template Fields</h6>
+                                                
+                                                <div className="bg-black p-3 rounded border border-secondary mb-3">
+                                                    {selectedPartCategory.template_fields && selectedPartCategory.template_fields.length > 0 ? (
+                                                        <div className="d-flex flex-column gap-2">
+                                                            {selectedPartCategory.template_fields.map((field, idx) => (
+                                                                <div key={idx} className="bg-secondary p-2 rounded d-flex justify-content-between align-items-center border border-dark">
+                                                                    <div className="d-flex align-items-center gap-3">
+                                                                        <Badge bg={field.type === 'dimension' ? "info" : "secondary"} className={`${field.type === 'dimension' ? 'text-dark' : 'text-light'} small px-2 py-1`}>{field.type === 'text' ? 'other units' : field.type}</Badge>
+                                                                        <span className="text-white fw-bold small">{field.key}</span>{field.is_primary && <Badge bg="info" className="text-dark extreme-small fw-black ms-2" style={{ letterSpacing: '0' }}>★ PRIMARY</Badge>}
+                                                                        {field.unit && <Badge bg="secondary" className="small opacity-75">{field.unit}</Badge>}
+                                                                        {field.diagram_url && <Badge bg="success" className="extreme-small border border-success border-opacity-25" title={field.diagram_url}>DIAGRAM SET</Badge>}
+                                                                    </div>
+                                                                    <div className="d-flex align-items-center gap-2">
+                                                                        <Button variant="link" className="text-info p-0 border-0 me-2 text-decoration-none fw-bold" onClick={() => handleEditTemplateField(idx)}>Edit</Button>
+                                                                        <Button variant="link" className="text-danger p-0 border-0 text-decoration-none opacity-50 hover-opacity-100" onClick={() => handleRemoveTemplateField(idx)}>Remove</Button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center py-2 text-muted small italic">No template fields defined.</div>
+                                                    )}
+                                                </div>
+
+                                                <div className="bg-dark p-3 rounded border border-secondary">
+                                                    <h6 className="text-info extreme-small fw-bold text-uppercase mb-3 italic">{editingTemplateFieldIndex !== null ? 'Editing Specification Field' : 'Define New Specification Field'}</h6>
+                                                    <Row className="g-2">
+                                                        <Col md={3}>
+                                                            <Form.Control 
+                                                                type="text" 
+                                                                placeholder="Key (e.g. Weight)" 
+                                                                className="input-contrast p-2 small" 
+                                                                value={newTemplateKey} 
+                                                                onChange={e => setNewTemplateKey(e.target.value)} 
+                                                            />
+                                                        </Col>
+                                                        <Col md={2}>
+                                                            <Form.Select 
+                                                                className="input-contrast p-2 small" 
+                                                                value={newTemplateType}
+                                                                onChange={e => setNewTemplateType(e.target.value as 'text' | 'dimension')}
+                                                            >
+                                                                <option value="dimension">Dimension</option>
+                                                                <option value="text">Other Units</option>
+                                                            </Form.Select>
+                                                        </Col>
+                                                        <Col md={2} className="position-relative d-flex align-items-center">
+                                                            <Form.Check 
+                                                                type="checkbox" 
+                                                                label={<span className="text-info extreme-small fw-bold text-uppercase italic">Primary</span>}
+                                                                className="ms-2"
+                                                                checked={newTemplateIsPrimary}
+                                                                onChange={e => setNewTemplateIsPrimary(e.target.checked)}
+                                                            />
+                                                        </Col>
+                                                        <Col md={2} className="position-relative">
+                                                            {newTemplateType === 'dimension' && (
+                                                                <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', zIndex: 10 }}>
+                                                                    {['mm', 'cm', 'in'].map(u => (
+                                                                        <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewTemplateUnit(u)}>{u}</Badge>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            {newTemplateType === 'text' && (
+                                                                <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', width: 'max-content', zIndex: 10 }}>
+                                                                    {['kg', 'lb', 'V', 'Wh', 'kv', 'T'].map(u => (
+                                                                        <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewTemplateUnit(u)}>{u}</Badge>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            <Form.Control 
+                                                                type="text" 
+                                                                placeholder="Unit (e.g. mm)" 
+                                                                className="input-contrast p-2 small" 
+                                                                value={newTemplateUnit} 
+                                                                onChange={e => setNewTemplateUnit(e.target.value)} 
+                                                            />
+                                                        </Col>
+                                                        <Col md={3}>
+                                                            <InputGroup size="sm" className="shadow-sm">
+                                                                <Form.Control 
+                                                                    type="text" 
+                                                                    placeholder="Placeholder..." 
+                                                                    className="input-contrast p-2 small border-secondary" 
+                                                                    value={newTemplatePlaceholder} 
+                                                                    onChange={e => setNewTemplatePlaceholder(e.target.value)} 
+                                                                    style={newTemplateType === 'dimension' ? { borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}}
+                                                                />
+                                                                {newTemplateType === 'dimension' && (
+                                                                    <InputGroup.Text className="input-contrast border-secondary border-start-0 text-info opacity-75 extreme-small fw-bold" style={{ backgroundColor: 'transparent' }}>
+                                                                        {newTemplateUnit || 'mm'}
+                                                                    </InputGroup.Text>
+                                                                )}
+                                                            </InputGroup>
+                                                        </Col>
+                                                        <Col md={4}>
+                                                            <Form.Control 
+                                                                type="text" 
+                                                                placeholder="Helper Image URL (Optional)" 
+                                                                className="input-contrast p-2 small" 
+                                                                value={newTemplateDiagramUrl} 
+                                                                onChange={e => setNewTemplateDiagramUrl(e.target.value)} 
+                                                            />
+                                                        </Col>
+                                                        <Col md={2} className="d-flex gap-2">
+                                                            <Button variant={editingTemplateFieldIndex !== null ? "success" : "info"} className="w-100 fw-bold small py-2" onClick={handleAddTemplateField} disabled={!newTemplateKey.trim()}>
+                                                                {editingTemplateFieldIndex !== null ? 'Update Field' : 'Add Field'}
+                                                            </Button>
+                                                            {editingTemplateFieldIndex !== null && (
+                                                                <Button variant="outline-secondary" className="small py-2" onClick={handleCancelTemplateEdit}>Cancel</Button>
+                                                            )}
+                                                        </Col>
+                                                    </Row>
+                                                </div>
+                                            </div>
+
+                                            <div className="d-flex justify-content-between mt-2">
                                                 <Button variant="secondary" size="sm" className="fw-bold" onClick={() => setSelectedPartCategory(null)}>Close Editor</Button>
                                                 <Button variant="outline-danger" size="sm" onClick={() => setPartCategoryDeleteConfirm(true)}>Delete "{selectedPartCategory.name}"</Button>
                                             </div>
@@ -1585,6 +1965,168 @@ export default function AdminPage() {
                         </div>
                     </Tab>
 
+                    {/* 10. Attribute Dictionary */}
+                    <Tab eventKey="attributes" title={`10. Attributes (${attributeDictionary.length})`}>
+                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
+                            <div className="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary">
+                                <div>
+                                    <h5 className="text-info fw-bold mb-1">Global Attribute Dictionary</h5>
+                                    <p className="text-muted small mb-0">Review and reconcile custom JSONB attributes used across all parts.</p>
+                                </div>
+                                <div className="d-flex align-items-center gap-3">
+                                    <span className="small fw-bold text-muted uppercase letter-spacing-1">Filter Category:</span>
+                                    <Form.Select 
+                                        className="bg-black text-white border-secondary small py-1 px-3 fw-bold" 
+                                        style={{ width: 'auto', minWidth: '200px' }}
+                                        value={selectedAttributeCategory} 
+                                        onChange={e => setSelectedAttributeCategory(e.target.value)}
+                                    >
+                                        {partCategories.map(cat => (
+                                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                                        ))}
+                                    </Form.Select>
+                                </div>
+                            </div>
+
+                            {isLoading || isHiddenLoading ? (
+                                <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
+                            ) : attributeDictionary.length === 0 ? (
+                                <div className="p-5 text-center text-gray-400 bg-secondary rounded border border-secondary shadow-sm">
+                                    No custom attributes discovered in the catalog.
+                                </div>
+                            ) : (
+                                <div className="table-responsive rounded border border-secondary overflow-hidden">
+                                    <table className="table table-dark table-hover mb-0">
+                                        <thead>
+                                            <tr>
+                                                <th className="bg-black border-secondary py-3 ps-4 small fw-bold text-uppercase letter-spacing-1">Attribute Key</th>
+                                                <th className="bg-black border-secondary py-3 small fw-bold text-uppercase letter-spacing-1 text-center">Usage Count</th>
+                                                <th className="bg-black border-secondary py-3 pe-4 small fw-bold text-uppercase letter-spacing-1 text-end">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {attributeDictionary.map((attr, idx) => (
+                                                <tr key={idx} className="border-secondary">
+                                                    <td className="py-3 ps-4 align-middle">
+                                                        <span className="text-info font-monospace fw-bold">{attr.key}</span>
+                                                    </td>
+                                                    <td className="py-3 text-center align-middle">
+                                                        <Badge bg="secondary" className="px-3 py-2 border border-secondary">{attr.count} uses</Badge>
+                                                    </td>
+                                                    <td className="py-3 pe-4 text-end align-middle">
+                                                        <Button variant="outline-light" size="sm" className="fw-bold" onClick={() => { setTargetAttributeKey(attr.key); setNewAttributeKey(attr.key); setShowAttributeMergeModal(true); }}>
+                                                            Rename / Merge
+                                                        </Button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </Tab>
+
+                    {/* 11. Needs Description / Images */}
+                    <Tab eventKey="missing" title="11. Asset Audit (Missing Info)">
+                        <div className="mt-4 p-4 p-md-5 bg-dark border border-secondary rounded shadow-sm">
+                            <div className="mb-5">
+                                <h5 className="text-info fw-bold mb-1">Database Asset Tracking</h5>
+                                <p className="text-muted small">Identify and fix missing descriptions, images, and diagrams.</p>
+                            </div>
+
+                            {isAuditLoading ? (
+                                <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
+                            ) : (
+                                <Row className="g-4">
+                                    <Col lg={4}>
+                                        <Card className="bg-black border-secondary h-100 shadow-sm">
+                                            <Card.Header className="bg-dark border-secondary p-3 d-flex justify-content-between align-items-center">
+                                                <h6 className="text-white fw-bold mb-0 uppercase letter-spacing-1 small">Brands Missing Info</h6>
+                                                <Badge bg="danger">{missingBrands.length}</Badge>
+                                            </Card.Header>
+                                            <Card.Body className="p-0 overflow-auto" style={{ maxHeight: '400px' }}>
+                                                {missingBrands.length === 0 ? (
+                                                    <div className="p-4 text-center text-muted small italic">Registry healthy.</div>
+                                                ) : (
+                                                    <div className="list-group list-group-flush">
+                                                        {missingBrands.map(b => (
+                                                            <div key={b.id} className="list-group-item bg-transparent border-secondary border-opacity-25 d-flex justify-content-between align-items-center py-3">
+                                                                <div className="pe-2">
+                                                                    <div className="text-white fw-bold small">{b.name}</div>
+                                                                    <div className="text-danger extreme-small uppercase letter-spacing-1">Missing {!b.description ? 'Desc' : ''}{!b.description && !b.image_url ? ' / ' : ''}{!b.image_url ? 'Image' : ''}</div>
+                                                                </div>
+                                                                <Button variant="outline-info" size="sm" className="extreme-small fw-bold" onClick={() => { setEditingBrandAdmin(b); setEditBrandName(b.name); setEditBrandOverview(b.description || ""); setEditBrandImage(b.image_url || null); }}>EDIT</Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </Card.Body>
+                                        </Card>
+                                    </Col>
+                                    <Col lg={4}>
+                                        <Card className="bg-black border-secondary h-100 shadow-sm">
+                                            <Card.Header className="bg-dark border-secondary p-3 d-flex justify-content-between align-items-center">
+                                                <h6 className="text-white fw-bold mb-0 uppercase letter-spacing-1 small">Models Missing Info</h6>
+                                                <Badge bg="danger">{missingModels.length}</Badge>
+                                            </Card.Header>
+                                            <Card.Body className="p-0 overflow-auto" style={{ maxHeight: '400px' }}>
+                                                {missingModels.length === 0 ? (
+                                                    <div className="p-4 text-center text-muted small italic">All models populated.</div>
+                                                ) : (
+                                                    <div className="list-group list-group-flush">
+                                                        {missingModels.map(m => (
+                                                            <div key={m.id} className="list-group-item bg-transparent border-secondary border-opacity-25 d-flex justify-content-between align-items-center py-3">
+                                                                <div className="pe-2">
+                                                                    <div className="text-white fw-bold small">{m.name}</div>
+                                                                    <div className="text-info extreme-small fw-bold">{(m as any).brands?.name}</div>
+                                                                    <div className="text-danger extreme-small uppercase letter-spacing-1">Missing {!m.description ? 'Desc' : ''}{!m.description && !m.image_url ? ' / ' : ''}{!m.image_url ? 'Image' : ''}</div>
+                                                                </div>
+                                                                <Button variant="outline-info" size="sm" className="extreme-small fw-bold" onClick={() => { setEditingModelAdmin(m); setEditModelName(m.name); setEditModelDesc(m.description || ""); setEditModelImage(m.image_url || null); }}>EDIT</Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </Card.Body>
+                                        </Card>
+                                    </Col>
+                                    <Col lg={4}>
+                                        <Card className="bg-black border-secondary h-100 shadow-sm">
+                                            <Card.Header className="bg-dark border-secondary p-3 d-flex justify-content-between align-items-center">
+                                                <h6 className="text-white fw-bold mb-0 uppercase letter-spacing-1 small">Missing Diagrams</h6>
+                                                <Badge bg="warning" text="dark">{missingAttributes.length}</Badge>
+                                            </Card.Header>
+                                            <Card.Body className="p-0 overflow-auto" style={{ maxHeight: '400px' }}>
+                                                {missingAttributes.length === 0 ? (
+                                                    <div className="p-4 text-center text-muted small italic">Diagram library complete.</div>
+                                                ) : (
+                                                    <div className="list-group list-group-flush">
+                                                        {missingAttributes.map((attr, idx) => (
+                                                            <div key={idx} className="list-group-item bg-transparent border-secondary border-opacity-25 d-flex justify-content-between align-items-start py-3">
+                                                                <div>
+                                                                    <div className="text-white fw-bold small">{attr.fieldKey}</div>
+                                                                    <Badge bg="secondary" className="extreme-small">{attr.categoryName}</Badge>
+                                                                </div>
+                                                                <Button variant="outline-info" size="sm" className="extreme-small fw-bold" onClick={() => { 
+                                                                    const cat = partCategories.find(c => c.name === attr.categoryName);
+                                                                    if (cat) {
+                                                                        setSelectedPartCategory(cat);
+                                                                        setEditPartCategoryName(cat.name);
+                                                                        setActiveTab('categories');
+                                                                    }
+                                                                }}>GOTO CAT</Button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </Card.Body>
+                                        </Card>
+                                    </Col>
+                                </Row>
+                            )}
+                        </div>
+                    </Tab>
+
                 </Tabs>
 
                 {editingPart && (
@@ -1680,6 +2222,116 @@ export default function AdminPage() {
                                     onChangeModel={(m) => setEditingPart(prev => prev ? { ...prev, model_id: m } : null)}
                                     onChangeNeedsReview={(b) => setEditingPart(prev => prev ? { ...prev, needs_model_review: b } : null)}
                                 />
+
+                                <div className="mt-4 pt-4 border-top border-secondary">
+                                    <h6 className="small uppercase fw-bold opacity-75 text-light mb-3">Specifications (Attributes)</h6>
+                                    <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
+                                        {(() => {
+                                            const activeCat = partCategories.find(c => c.id === editingPart.category_id);
+                                            const templateKeys = activeCat?.template_fields?.map((tf: any) => tf.key) || [];
+                                            const attributes = editingPart.attributes || {};
+                                            
+                                            const templateFields = activeCat?.template_fields || [];
+                                            const customKeys = Object.keys(attributes).filter(k => !templateKeys.includes(k) && !k.endsWith('__unit'));
+
+                                            return (
+                                                <>
+                                                    {/* Template Fields */}
+                                                    {templateFields.length > 0 && (
+                                                        <div className="mb-4">
+                                                            <div className="text-info extreme-small fw-bold text-uppercase mb-3 opacity-50">Category Template Fields</div>
+                                                            <Row className="g-3">
+                                                                {templateFields.map((tf: any) => (
+                                                                    <Col md={6} key={tf.key}>
+                                                                        <Form.Group>
+                                                                            <Form.Label className="extreme-small text-light uppercase fw-bold mb-1 d-flex justify-content-between">
+                                                                                {tf.key} {tf.unit && <span className="text-muted">({tf.unit})</span>}
+                                                                            </Form.Label>
+                                                                            <Form.Control 
+                                                                                type="text"
+                                                                                className="bg-dark text-white border-secondary p-2 small"
+                                                                                value={attributes[tf.key] || ''}
+                                                                                onChange={e => {
+                                                                                    const newAttrs = { ...attributes, [tf.key]: e.target.value };
+                                                                                    if (tf.unit) newAttrs[`${tf.key}__unit`] = tf.unit;
+                                                                                    setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                }}
+                                                                            />
+                                                                        </Form.Group>
+                                                                    </Col>
+                                                                ))}
+                                                            </Row>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Custom Fields */}
+                                                    <div className="mb-2">
+                                                        <div className="text-warning extreme-small fw-bold text-uppercase mb-3 opacity-50">Custom Specifications</div>
+                                                        {customKeys.length === 0 ? (
+                                                            <div className="text-muted small italic opacity-50 py-2">No custom attributes assigned.</div>
+                                                        ) : (
+                                                            <Row className="g-3">
+                                                                {customKeys.map(k => (
+                                                                    <Col md={6} key={k}>
+                                                                        <Form.Group>
+                                                                            <Form.Label className="extreme-small text-light uppercase fw-bold mb-1 d-flex justify-content-between">
+                                                                                {k} <span className="text-muted">({attributes[`${k}__unit`] || 'value'})</span>
+                                                                            </Form.Label>
+                                                                            <InputGroup>
+                                                                                <Form.Control 
+                                                                                    type="text"
+                                                                                    className="bg-dark text-white border-secondary p-2 small"
+                                                                                    value={attributes[k] || ''}
+                                                                                    onChange={e => {
+                                                                                        const newAttrs = { ...attributes, [k]: e.target.value };
+                                                                                        setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                    }}
+                                                                                />
+                                                                                <Button variant="outline-danger" size="sm" className="px-2" onClick={() => {
+                                                                                    const newAttrs = { ...attributes };
+                                                                                    delete newAttrs[k];
+                                                                                    delete newAttrs[`${k}__unit`];
+                                                                                    setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                }}>×</Button>
+                                                                            </InputGroup>
+                                                                        </Form.Group>
+                                                                    </Col>
+                                                                ))}
+                                                            </Row>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    {/* Add Generic Field */}
+                                                    <div className="mt-4 pt-3 border-top border-secondary border-opacity-10 d-flex gap-2">
+                                                         <Form.Control 
+                                                            id="new-admin-attr-key" 
+                                                            placeholder="New Generic Spec Key..." 
+                                                            className="bg-dark text-white border-secondary p-2 small flex-grow-1" 
+                                                            onKeyDown={e => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.preventDefault();
+                                                                    const btn = document.getElementById('add-admin-attr-btn');
+                                                                    btn?.click();
+                                                                }
+                                                            }}
+                                                        />
+                                                         <Button id="add-admin-attr-btn" variant="outline-info" size="sm" className="fw-bold text-uppercase px-3" onClick={() => {
+                                                             const keyInput = document.getElementById('new-admin-attr-key') as HTMLInputElement;
+                                                             const key = keyInput?.value?.trim();
+                                                             if (key) {
+                                                                 setEditingPart({
+                                                                     ...editingPart,
+                                                                     attributes: { ...attributes, [key]: '' }
+                                                                 });
+                                                                 keyInput.value = '';
+                                                             }
+                                                         }}>+ Add Spec</Button>
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+                                </div>
                                 <Form.Check type="checkbox" id="edit-oem-check" label="OFFICIAL OEM PART" checked={editingPart.is_oem || false} onChange={e => setEditingPart({ ...editingPart, is_oem: e.target.checked })} className="fw-bold text-primary mt-3" />
                             </div>
                         </Modal.Body>
@@ -1803,6 +2455,31 @@ export default function AdminPage() {
                             </Col>
 
                         </Row>
+                    </Modal.Body>
+                </Modal>
+
+                {/* Attribute Merge Modal */}
+                <Modal show={showAttributeMergeModal} onHide={() => setShowAttributeMergeModal(false)} size="sm" data-bs-theme="dark" centered>
+                    <Modal.Header closeButton className="bg-dark border-secondary text-light">
+                        <Modal.Title className="fw-bold small text-uppercase letter-spacing-1">Merge Attribute Key</Modal.Title>
+                    </Modal.Header>
+                    <Modal.Body className="bg-dark text-light border-0 p-4">
+                        <div className="mb-3">
+                            <label className="extreme-small text-muted uppercase fw-bold mb-2 d-block">Target Key</label>
+                            <div className="p-3 bg-black rounded border border-secondary text-info font-monospace fw-bold small">{targetAttributeKey}</div>
+                        </div>
+                        <div className="mb-4">
+                            <label className="extreme-small text-muted uppercase fw-bold mb-2 d-block">New Key Name</label>
+                            <Form.Control 
+                                className="input-contrast p-2" 
+                                placeholder="e.g. Total Weight"
+                                value={newAttributeKey}
+                                onChange={e => setNewAttributeKey(e.target.value)}
+                            />
+                        </div>
+                        <Button variant="info" className="w-100 fw-bold py-2 border-0 shadow" onClick={handleMergeAttributes} disabled={isMergingAttributes || !newAttributeKey.trim()}>
+                            {isMergingAttributes ? <Spinner size="sm" animation="border" /> : 'Confirm Merge'}
+                        </Button>
                     </Modal.Body>
                 </Modal>
             </Container>

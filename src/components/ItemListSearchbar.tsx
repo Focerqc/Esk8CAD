@@ -7,26 +7,31 @@ import CopyLinkButton from "./CopyLinkButton"
 import PartCard, { PartSchema } from "./PartCard"
 import { useParts } from "../util/parts"
 import { useBrandHardware } from "../hooks/useBrandHardware"
-import { Part } from "../lib/supabase"
+import { Part as OldPart } from "../lib/supabase"
 import { useBoardHook } from "../hooks/useBoardHook"
 
 /**
  * Maps Supabase `Part` exactly to the new `PartSchema` expected by `PartCard`
  */
-const mapPartToSchema = (part: Part): PartSchema => {
+const mapPartToSchema = (part: any): PartSchema => {
     return {
         id: part.id ? String(part.id) : "Unknown",
         title: part.title || "Untitled Part",
         image_url: (typeof part.image_src === 'string' ? part.image_src : part.image_src?.[0]) || "",
         author: part.author || "Unknown User",
-        boardPlatform: (part.platform && part.platform.length > 0) ? part.platform[0] : "Misc",
+        boardPlatform: part.brands?.name || (part.platform && part.platform.length > 0 ? part.platform[0] : "Misc"),
         tags: [
-            ...(part.type_of_part || []),
-            ...(part.fabrication_method || []),
+            ...(part.part_categories?.name ? [part.part_categories.name] : (part.type_of_part || [])),
+            ...(part.fabrication_methods?.name ? [part.fabrication_methods.name] : (part.fabrication_method || [])),
             ...(part.board_model ? [part.board_model] : []),
         ],
         externalUrl: part.external_url || undefined,
         dropboxUrl: part.dropbox_url || undefined,
+        brands: part.brands || null,
+        part_categories: part.part_categories || null,
+        fabrication_methods: part.fabrication_methods || null,
+        models: part.models || null,
+        attributes: part.attributes || {},
     }
 }
 
@@ -55,28 +60,13 @@ const getPlatformFromURL = () => {
         // If using universal brand route
         if (platformKey === 'brand' && segments.length >= 2) {
             platformKey = segments[1];
-        } else {
-            // Skip non-platform root pages
-            const nonPlatformRoots = ['admin', 'submit', 'id', 'oem', 'resources', 'tags', 'fosterqc', 'parts'];
-            if (nonPlatformRoots.includes(platformKey)) return undefined;
         }
+        
+        // Skip non-platform root pages
+        const nonPlatformRoots = ['admin', 'submit', 'id', 'oem', 'resources', 'tags', 'fosterqc', 'parts'];
+        if (nonPlatformRoots.includes(platformKey)) return undefined;
 
-        // Handle special cases
-        if (platformKey === 'street') return 'Street (DIY/Generic)';
-        if (platformKey === 'offroad') return 'Off-Road (DIY/Generic)';
-        if (platformKey === '3dservisas') return '3D Servisas';
-        if (platformKey === 'defiant') return 'Defiant Board Society';
-        if (platformKey === 'hoyt') return 'Hoyt St';
-        if (platformKey === 'lacroix') return 'Lacroix Boards';
-        if (platformKey === 'linnpower') return 'Linnpower';
-        if (platformKey === 'mboards') return 'MBoards';
-        if (platformKey === 'radium') return 'Radium Performance';
-        if (platformKey === 'stooge') return 'Stooge Raceboards';
-        if (platformKey === 'trampa') return 'Trampa Boards';
-        if (platformKey === 'wowgo') return 'Wowgo';
-
-        // Fallback: convert hyphens to spaces and title case
-        return platformKey.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        return platformKey.toLowerCase();
     }
 
     return undefined;
@@ -119,7 +109,10 @@ const SkeletonGrid = () => (
 
 export default ({ platformOverride }: { platformOverride?: string }) => {
     const navigate = useNavigate();
-    const activePlatform = useMemo(() => platformOverride || getPlatformFromURL() || null, [platformOverride]);
+    const activePlatform = useMemo(() => {
+        const platform = platformOverride || getPlatformFromURL() || null;
+        return platform ? platform.toLowerCase() : null;
+    }, [platformOverride]);
     const urlCategory = useMemo(() => getCategoryFromURL(), []);
 
     // State
@@ -130,15 +123,19 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     const [checkedFabricationMethodBoxes, setCheckedFabricationMethodBoxes] = useState<{ [key: string]: boolean }>({});
 
     // Hooks
-    const { parts, isLoading, error } = useParts(activePlatform || undefined);
-    const { models: brandModels, isLoading: modelsLoading } = useBrandHardware(activePlatform);
     const { brands: allBrands } = useBoardHook();
 
     const currentBrand = useMemo(() => {
         if (!activePlatform) return null;
-        return allBrands.find(b => b.name.toLowerCase() === activePlatform.toLowerCase()) ||
-            allBrands.find(b => b.safe_slug === activePlatform.toLowerCase()) || null;
+        return allBrands.find(b => b.safe_slug === activePlatform.toLowerCase()) || 
+               allBrands.find(b => b.name.toLowerCase() === activePlatform.toLowerCase()) || null;
     }, [allBrands, activePlatform]);
+
+    const resolvedDisplayName = currentBrand ? currentBrand.name : (activePlatform || undefined);
+
+    // Pass the raw activePlatform (slug) to the hooks
+    const { parts, isLoading, error } = useParts(activePlatform || undefined, urlCategory || undefined);
+    const { models: brandModels, isLoading: modelsLoading } = useBrandHardware(currentBrand?.id || activePlatform || null);
 
     // Sync model from URL on mount
     useEffect(() => {
@@ -158,12 +155,8 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
             const segments = window.location.pathname.split('/').filter(Boolean);
             const isUniversal = segments[0] === 'brand';
 
-            // Clean slug for the brand
-            const brandSlug = activePlatform.toLowerCase()
-                .replace(/ street \(diy\/generic\)/g, 'street')
-                .replace(/ off-road \(diy\/generic\)/g, 'offroad')
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-+|-+$/g, '');
+            // Use exact known safe slug from DB or fallback
+            const brandSlug = currentBrand?.safe_slug || activePlatform;
 
             let targetBase = isUniversal ? `brand/${segments[1]}` : brandSlug;
 
@@ -180,8 +173,8 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
     const uniqueFabricationMethods = useMemo(() => {
         const methods = new Set<string>();
         parts.forEach(p => {
-            if (p.fabrication_method) {
-                p.fabrication_method.forEach(m => methods.add(m));
+            if (p.fabrication_methods?.name) {
+                methods.add(p.fabrication_methods.name);
             }
         });
         return Array.from(methods).sort();
@@ -202,7 +195,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
 
             const activeMethods = Object.keys(checkedFabricationMethodBoxes).filter(k => checkedFabricationMethodBoxes[k]);
             const matchesFabrication = activeMethods.length === 0 ||
-                (p.fabrication_method && p.fabrication_method.some(m => activeMethods.includes(m)));
+                (p.fabrication_methods?.name && activeMethods.includes(p.fabrication_methods.name));
 
             return matchesSearch && matchesModel && matchesFabrication;
         });
@@ -287,7 +280,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                                     <span className="text-info text-uppercase fw-bold small text-tracking-widest">{urlCategory ? "Sitewide Filter" : "Hardware Repository"}</span>
                                 </div>
                                 <h1 className="display-4 fw-black text-white text-uppercase mb-4" style={{ letterSpacing: '-0.02em' }}>
-                                    {activePlatform || (urlCategory ? urlCategory.charAt(0).toUpperCase() + urlCategory.slice(1) : "Catalog")}
+                                    {resolvedDisplayName || (urlCategory ? urlCategory.charAt(0).toUpperCase() + urlCategory.slice(1) : "Catalog")}
                                 </h1>
 
                                 <h6 className="text-secondary text-uppercase fw-bold small text-tracking-widest mb-3 italic">{activePlatform ? "Select Board Model" : "Models Available"}</h6>
@@ -352,7 +345,7 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                                             </div>
                                         </Col>
                                         <Col md={8}>
-                                            <h2 className="text-white fw-black text-uppercase italic mb-1" style={{ fontSize: '2rem', letterSpacing: '-0.03em' }}>{activePlatform}</h2>
+                                            <h2 className="text-white fw-black text-uppercase italic mb-1" style={{ fontSize: '2rem', letterSpacing: '-0.03em' }}>{resolvedDisplayName}</h2>
                                             <div className="text-info text-uppercase fw-bold small text-tracking-widest mb-4" style={{ fontSize: '10px' }}>Hardware Repository</div>
                                             <p className="text-light font-monospace mb-0" style={{ lineHeight: '1.6', fontSize: '14px', whiteSpace: 'pre-wrap', opacity: 0.85 }}>
                                                 {currentBrand?.description || "AWAITING ADMINISTRATIVE DOCUMENTATION SYNC FOR THIS HARDWARE PLATFORM."}

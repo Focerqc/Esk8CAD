@@ -14,6 +14,7 @@ export interface Part {
     // Legacy arrays used previously; keeping them optional so TS doesn't break if old data is returned
     type_of_part?: string[];
     fabrication_method?: string[];
+    attributes?: Record<string, any> | null;
     specs?: Record<string, any>;
     status?: string;
     is_oem?: boolean;

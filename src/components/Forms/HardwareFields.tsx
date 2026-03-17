@@ -9,6 +9,7 @@ interface HardwareFieldsProps {
     needsModelReview: boolean;
     onChangeModel: (modelId: string | null) => void;
     onChangeNeedsReview: (needsReview: boolean) => void;
+    onUnsavedChange?: (hasUnsaved: boolean) => void;
 }
 
 export default function HardwareFields({
@@ -16,7 +17,8 @@ export default function HardwareFields({
     modelId,
     needsModelReview,
     onChangeModel,
-    onChangeNeedsReview
+    onChangeNeedsReview,
+    onUnsavedChange
 }: HardwareFieldsProps) {
     const { models, isLoading } = useBrandHardware(brandId);
 
@@ -27,6 +29,13 @@ export default function HardwareFields({
     // For Board Model
     const [isAddingNewModel, setIsAddingNewModel] = useState(false);
     const [tempCustomModel, setTempCustomModel] = useState("");
+
+    // Report unsaved state
+    useEffect(() => {
+        if (onUnsavedChange) {
+            onUnsavedChange(isAddingNewModel && tempCustomModel.trim().length > 0);
+        }
+    }, [isAddingNewModel, tempCustomModel, onUnsavedChange]);
 
     // Sync init state
     useEffect(() => {

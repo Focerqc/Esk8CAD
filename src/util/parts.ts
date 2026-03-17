@@ -10,6 +10,7 @@ export type Part = Tables['parts']['Row'] & {
   brands?: Pick<Tables['brands']['Row'], 'name' | 'slug'> | null;
   part_categories?: Pick<Tables['part_categories']['Row'], 'name' | 'slug'> | null;
   models?: Pick<Tables['models']['Row'], 'name' | 'slug'> | null;
+  fabrication_methods?: Pick<Tables['fabrication_methods']['Row'], 'name' | 'slug'> | null;
 };
 
 export const useParts = (platform?: string, categorySlug?: string) => {
@@ -33,16 +34,22 @@ export const useParts = (platform?: string, categorySlug?: string) => {
           .from('parts')
           .select(`
             *,
-            brands!parts_platform_id_fkey(name, slug),
-            part_categories!parts_category_id_fkey(name, slug),
-            models!parts_model_id_fkey(name, slug)
+            brands!inner(*),
+            part_categories(*),
+            models(*),
+            fabrication_methods(*)
           `)
           .eq('status', 'approved')
           .is('deleted_at', null);
 
-        // Dynamic platform filtering using the 'platform' text array column
+        // Filter by the brand slug directly
         if (platform && platform !== 'all') {
-          query = query.contains('platform', [platform]);
+          query = query.eq('brands.slug', platform.toLowerCase());
+        }
+
+        // Filter by the category slug directly
+        if (categorySlug && categorySlug !== 'all') {
+          query = query.eq('part_categories.slug', categorySlug.toLowerCase());
         }
 
         const { data, error: sbError } = await query;
@@ -50,14 +57,7 @@ export const useParts = (platform?: string, categorySlug?: string) => {
         if (sbError) throw sbError;
 
         if (isMounted && data) {
-          let results = data as unknown as Part[];
-
-          // Filter by the new category slug column
-          if (categorySlug && categorySlug !== 'all') {
-            results = results.filter(p => p.part_categories?.slug === categorySlug);
-          }
-
-          setParts(results);
+          setParts(data as unknown as Part[]);
           setError(null);
         }
       } catch (err: any) {
