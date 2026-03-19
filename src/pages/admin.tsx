@@ -5,6 +5,7 @@ import SiteNavbar from "../components/SiteNavbar"
 import SiteFooter from "../components/SiteFooter"
 import SiteMetaData from "../components/SiteMetaData"
 import HardwareFields from "../components/Forms/HardwareFields"
+import SharedAttributeEditor from "../components/Forms/SharedAttributeEditor"
 import { getSupabaseClient, Part, Brand, Model } from "../lib/supabase"
 import { SupabaseClient, User, AuthChangeEvent, Session } from "@supabase/supabase-js"
 import { useBoardHook } from "../hooks/useBoardHook"
@@ -16,6 +17,7 @@ interface CategoryTemplateField {
     placeholder?: string;
     diagram_url?: string;
     is_primary?: boolean;
+    is_bearing?: boolean;
 }
 
 interface Taxonomy {
@@ -183,6 +185,7 @@ export default function AdminPage() {
     const [newTemplatePlaceholder, setNewTemplatePlaceholder] = useState("");
     const [newTemplateDiagramUrl, setNewTemplateDiagramUrl] = useState("");
     const [newTemplateIsPrimary, setNewTemplateIsPrimary] = useState(false);
+    const [newTemplateIsBearing, setNewTemplateIsBearing] = useState(false);
     const [editingTemplateFieldIndex, setEditingTemplateFieldIndex] = useState<number | null>(null);
 
     // Tab 6 & 7 Refactor States
@@ -215,6 +218,7 @@ export default function AdminPage() {
     const [missingModels, setMissingModels] = useState<any[]>([]);
     const [missingAttributes, setMissingAttributes] = useState<{ categoryName: string, fieldKey: string }[]>([]);
     const [isAuditLoading, setIsAuditLoading] = useState(false);
+    const [isUploadingDiagram, setIsUploadingDiagram] = useState(false);
 
     const [isActionLoading, setIsActionLoading] = useState(false);
 
@@ -225,13 +229,16 @@ export default function AdminPage() {
     const [editingPart, setEditingPart] = useState<Part | null>(null);
     const [isSavingEdit, setIsSavingEdit] = useState(false);
     const [registrySearchText, setRegistrySearchText] = useState("");
-    const [selectedAttributeCategory, setSelectedAttributeCategory] = useState<string>("");
+    const [selectedAttributeCategory, setSelectedAttributeCategory] = useState<string>("all");
+    const [attributeZoomedFields, setAttributeZoomedFields] = useState<Record<string, boolean>>({});
+    const [attributeDimensionUnits, setAttributeDimensionUnits] = useState<Record<string, string>>({});
     
     // Attribute Merge Modal State
     const [showAttributeMergeModal, setShowAttributeMergeModal] = useState(false);
     const [targetAttributeKey, setTargetAttributeKey] = useState("");
     const [newAttributeKey, setNewAttributeKey] = useState("");
     const [isMergingAttributes, setIsMergingAttributes] = useState(false);
+    const [activeAttributeFilter, setActiveAttributeFilter] = useState<string | null>(null);
 
     // Detect Tab from URL
     const [activeTab, setActiveTab] = useState('queue');
@@ -249,6 +256,26 @@ export default function AdminPage() {
         }
     }, [urlTab]);
 
+    // Sync units from JSONB when entering edit mode
+    useEffect(() => {
+        if (editingPart && editingPart.attributes) {
+            const units: Record<string, string> = {};
+            Object.entries(editingPart.attributes).forEach(([k, v]) => {
+                if (k.endsWith('__unit')) {
+                    const key = k.replace('__unit', '');
+                    units[key] = v as string;
+                }
+            });
+            setAttributeDimensionUnits(units);
+        } else {
+            // Only clear when fully closing modal
+            if (!editingPart) {
+                setAttributeDimensionUnits({});
+                setAttributeZoomedFields({});
+            }
+        }
+    }, [editingPart]);
+
     // Sync Page Title to internal Navigation
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -259,7 +286,7 @@ export default function AdminPage() {
     // Default Attribute Category selection
     useEffect(() => {
         if (partCategories.length > 0 && !selectedAttributeCategory) {
-            setSelectedAttributeCategory(partCategories[0].id);
+            setSelectedAttributeCategory("all");
         }
     }, [partCategories, selectedAttributeCategory]);
 
@@ -396,12 +423,16 @@ export default function AdminPage() {
     const attributeDictionary = useMemo(() => {
         if (!selectedAttributeCategory) return [];
         const counts: Record<string, number> = {};
-        const allParts = [...parts, ...hiddenParts, ...deletedParts].filter(p => p.category_id === selectedAttributeCategory);
+        const allParts = [...parts, ...hiddenParts, ...deletedParts].filter(p => 
+            selectedAttributeCategory === 'all' || p.category_id === selectedAttributeCategory
+        );
         
         allParts.forEach(p => {
             if (p.attributes && typeof p.attributes === 'object') {
                 Object.keys(p.attributes).forEach(key => {
-                    counts[key] = (counts[key] || 0) + 1;
+                    if (!key.endsWith('__unit')) {
+                        counts[key] = (counts[key] || 0) + 1;
+                    }
                 });
             }
         });
@@ -410,6 +441,46 @@ export default function AdminPage() {
             .map(([key, count]) => ({ key, count }))
             .sort((a, b) => b.count - a.count);
     }, [parts, hiddenParts, deletedParts, selectedAttributeCategory]);
+
+    const handlePurgeAttribute = async (key: string) => {
+        if (!selectedAttributeCategory || !supabase) return;
+        if (!window.confirm(`Permanently remove "${key}" from ALL parts in the ${selectedAttributeCategory === 'all' ? 'entire database' : 'selected category'}? This cannot be undone.`)) return;
+
+        setIsMergingAttributes(true);
+        try {
+            let query = supabase.from('parts').select('id, attributes');
+            if (selectedAttributeCategory !== 'all') {
+                query = query.eq('category_id', selectedAttributeCategory);
+            }
+            
+            const { data: partsWithAttr, error: fetchError } = await query;
+            if (fetchError) throw fetchError;
+
+            const targets = (partsWithAttr as any[]).filter(p => p.attributes && (p.attributes[key] !== undefined || p.attributes[`${key}__unit`] !== undefined));
+
+            if (targets.length === 0) {
+                alert("No parts found containing this attribute.");
+                return;
+            }
+
+            for (const part of targets) {
+                const newAttrs = { ...part.attributes };
+                delete newAttrs[key];
+                delete newAttrs[`${key}__unit`];
+                
+                const { error: upError } = await supabase.from('parts').update({ attributes: newAttrs }).eq('id', part.id);
+                if (upError) console.error(`Failed to update part ${part.id}`, upError);
+            }
+
+            alert(`Successfully purged "${key}" from ${targets.length} parts.`);
+            fetchData();
+            fetchHiddenData();
+        } catch (err: any) {
+            alert(`Purge failed: ${err.message}`);
+        } finally {
+            setIsMergingAttributes(false);
+        }
+    };
 
     // Initial mount and client library check
     useEffect(() => {
@@ -816,7 +887,8 @@ export default function AdminPage() {
             unit: newTemplateUnit.trim() || undefined,
             placeholder: newTemplatePlaceholder.trim() || undefined,
             diagram_url: newTemplateDiagramUrl.trim() || undefined,
-            is_primary: newTemplateIsPrimary
+            is_primary: newTemplateIsPrimary,
+            is_bearing: newTemplateIsBearing
         };
         
         if (selectedPartCategory) {
@@ -834,7 +906,34 @@ export default function AdminPage() {
             setNewTemplatePlaceholder("");
             setNewTemplateDiagramUrl("");
             setNewTemplateIsPrimary(false);
+            setNewTemplateIsBearing(false);
             setEditingTemplateFieldIndex(null);
+        }
+    };
+
+    const handleDiagramUpload = async (file: File) => {
+        if (!supabase) return;
+        setIsUploadingDiagram(true);
+        try {
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Date.now()}_${Math.random().toString(36).substring(2)}.${fileExt}`;
+            const filePath = `attributes/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('brand-assets')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('brand-assets')
+                .getPublicUrl(filePath);
+
+            setNewTemplateDiagramUrl(publicUrl);
+        } catch (err: any) {
+            setError('Diagram upload failed: ' + (err.message || String(err)));
+        } finally {
+            setIsUploadingDiagram(false);
         }
     };
 
@@ -847,6 +946,7 @@ export default function AdminPage() {
             setNewTemplatePlaceholder(field.placeholder || "");
             setNewTemplateDiagramUrl(field.diagram_url || "");
             setNewTemplateIsPrimary(!!field.is_primary);
+            setNewTemplateIsBearing(!!field.is_bearing);
             setEditingTemplateFieldIndex(index);
         }
     };
@@ -858,6 +958,7 @@ export default function AdminPage() {
         setNewTemplatePlaceholder("");
         setNewTemplateDiagramUrl("");
         setNewTemplateIsPrimary(false);
+        setNewTemplateIsBearing(false);
         setEditingTemplateFieldIndex(null);
     };
 
@@ -1247,6 +1348,11 @@ export default function AdminPage() {
                 .admin-preview-scaler { transform: scale(1); transform-origin: top center; width: 100%; margin-top: 2rem; }
                 @media (max-width: 1400px) { .admin-preview-scaler { transform: scale(0.85); width: 118%; margin: 1rem -9%; } }
                 @media (max-width: 1215px) { .admin-preview-scaler { transform: scale(0.7); width: 142%; margin: -6rem -21%; } }
+                .animate-in { animation: fadeIn 0.3s ease-out; }
+                @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+                .hover-opacity-75:hover { opacity: 0.75; }
+                .hover-scale { transition: transform 0.2s; }
+                .hover-scale:hover { transform: scale(1.1); }
             ` }} />
             <SiteNavbar />
 
@@ -1349,27 +1455,53 @@ export default function AdminPage() {
 
                             {isLoading ? (
                                 <div className="p-5 text-center"><Spinner animation="border" variant="info" /></div>
-                            ) : approvedParts.filter(p => (p.title + (p.author || '') + p.id).toLowerCase().includes(registrySearchText.toLowerCase())).length === 0 ? (
-                                <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                    No records found matching "{registrySearchText}"
-                                </div>
                             ) : (
-                                <Row className="g-4">
+                                <>
+                                    {activeAttributeFilter && (
+                                        <Alert variant="info" className="d-flex justify-content-between align-items-center py-2 px-3 mb-4 bg-dark border-info text-info shadow-sm animate-in fade-in">
+                                            <div className="d-flex align-items-center gap-2">
+                                                <span className="small uppercase fw-bold opacity-75">Filtered by Attribute:</span>
+                                                <Badge bg="info" text="dark" className="px-2 py-1">{activeAttributeFilter}</Badge>
+                                            </div>
+                                            <Button 
+                                                variant="link" 
+                                                className="text-info p-0 text-decoration-none fw-bold hover-scale" 
+                                                style={{ fontSize: '1.2rem', lineHeight: 1 }}
+                                                onClick={() => setActiveAttributeFilter(null)}
+                                                title="Clear Filter"
+                                            >
+                                                &times;
+                                            </Button>
+                                        </Alert>
+                                    )}
+
                                     {approvedParts
                                         .filter(p => (p.title + (p.author || '') + p.id).toLowerCase().includes(registrySearchText.toLowerCase()))
-                                        .map(part => (
-                                            <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
-                                                <>
-                                                    <Button variant="outline-warning" size="sm" className="w-50 fw-bold" onClick={() => handleHidePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                        {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Hide'}
-                                                    </Button>
-                                                    <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handleSoftDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
-                                                        {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete'}
-                                                    </Button>
-                                                </>
-                                            } />
-                                        ))}
-                                </Row>
+                                        .filter(p => !activeAttributeFilter || (p.attributes && Object.keys(p.attributes).includes(activeAttributeFilter)))
+                                        .length === 0 ? (
+                                        <div className="p-5 text-center text-muted bg-secondary rounded border border-secondary shadow-sm" style={{ minHeight: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            No records found matching your current filters.
+                                        </div>
+                                    ) : (
+                                        <Row className="g-4">
+                                            {approvedParts
+                                                .filter(p => (p.title + (p.author || '') + p.id).toLowerCase().includes(registrySearchText.toLowerCase()))
+                                                .filter(p => !activeAttributeFilter || (p.attributes && Object.keys(p.attributes).includes(activeAttributeFilter)))
+                                                .map(part => (
+                                                    <AdminPartCard key={part.id} part={part} onEdit={() => setEditingPart({ ...part })} actions={
+                                                        <>
+                                                            <Button variant="outline-warning" size="sm" className="w-50 fw-bold" onClick={() => handleHidePart(part.id!)} disabled={actionLoadingId === part.id}>
+                                                                {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Hide'}
+                                                            </Button>
+                                                            <Button variant="outline-danger" size="sm" className="w-50 fw-bold" onClick={() => handleSoftDeletePart(part.id!)} disabled={actionLoadingId === part.id}>
+                                                                {actionLoadingId === part.id ? <Spinner size="sm" animation="border" /> : 'Delete'}
+                                                            </Button>
+                                                        </>
+                                                    } />
+                                                ))}
+                                        </Row>
+                                    )}
+                                </>
                             )}
                         </div>
                     </Tab>
@@ -1422,7 +1554,7 @@ export default function AdminPage() {
                                                             {selectedPartCategory.template_fields.map((field, idx) => (
                                                                 <div key={idx} className="bg-secondary p-2 rounded d-flex justify-content-between align-items-center border border-dark">
                                                                     <div className="d-flex align-items-center gap-3">
-                                                                        <Badge bg={field.type === 'dimension' ? "info" : "secondary"} className={`${field.type === 'dimension' ? 'text-dark' : 'text-light'} small px-2 py-1`}>{field.type === 'text' ? 'other units' : field.type}</Badge>
+                                                                        <Badge bg={field.type === 'dimension' ? "info" : "secondary"} className={`${field.type === 'dimension' ? 'text-dark' : 'text-light'} small px-2 py-1`}>{field.is_bearing ? 'bearing' : (field.type === 'text' ? 'other units' : field.type)}</Badge>
                                                                         <span className="text-white fw-bold small">{field.key}</span>{field.is_primary && <Badge bg="info" className="text-dark extreme-small fw-black ms-2" style={{ letterSpacing: '0' }}>★ PRIMARY</Badge>}
                                                                         {field.unit && <Badge bg="secondary" className="small opacity-75">{field.unit}</Badge>}
                                                                         {field.diagram_url && <Badge bg="success" className="extreme-small border border-success border-opacity-25" title={field.diagram_url}>DIAGRAM SET</Badge>}
@@ -1439,92 +1571,159 @@ export default function AdminPage() {
                                                     )}
                                                 </div>
 
-                                                <div className="bg-dark p-3 rounded border border-secondary">
-                                                    <h6 className="text-info extreme-small fw-bold text-uppercase mb-3 italic">{editingTemplateFieldIndex !== null ? 'Editing Specification Field' : 'Define New Specification Field'}</h6>
-                                                    <Row className="g-2">
+                                                <div className="bg-dark p-4 rounded border border-secondary shadow-sm">
+                                                    <h6 className="text-info extreme-small fw-bold text-uppercase mb-4 italic d-flex align-items-center gap-2">
+                                                        <div className="bg-info" style={{ width: '8px', height: '8px', borderRadius: '50%' }}></div>
+                                                        {editingTemplateFieldIndex !== null ? 'Modifying Specification' : 'Define New Specification Field'}
+                                                    </h6>
+                                                    <Row className="g-3">
                                                         <Col md={3}>
-                                                            <Form.Control 
-                                                                type="text" 
-                                                                placeholder="Key (e.g. Weight)" 
-                                                                className="input-contrast p-2 small" 
-                                                                value={newTemplateKey} 
-                                                                onChange={e => setNewTemplateKey(e.target.value)} 
-                                                            />
-                                                        </Col>
-                                                        <Col md={2}>
-                                                            <Form.Select 
-                                                                className="input-contrast p-2 small" 
-                                                                value={newTemplateType}
-                                                                onChange={e => setNewTemplateType(e.target.value as 'text' | 'dimension')}
-                                                            >
-                                                                <option value="dimension">Dimension</option>
-                                                                <option value="text">Other Units</option>
-                                                            </Form.Select>
-                                                        </Col>
-                                                        <Col md={2} className="position-relative d-flex align-items-center">
-                                                            <Form.Check 
-                                                                type="checkbox" 
-                                                                label={<span className="text-info extreme-small fw-bold text-uppercase italic">Primary</span>}
-                                                                className="ms-2"
-                                                                checked={newTemplateIsPrimary}
-                                                                onChange={e => setNewTemplateIsPrimary(e.target.checked)}
-                                                            />
-                                                        </Col>
-                                                        <Col md={2} className="position-relative">
-                                                            {newTemplateType === 'dimension' && (
-                                                                <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', zIndex: 10 }}>
-                                                                    {['mm', 'cm', 'in'].map(u => (
-                                                                        <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewTemplateUnit(u)}>{u}</Badge>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                            {newTemplateType === 'text' && (
-                                                                <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', width: 'max-content', zIndex: 10 }}>
-                                                                    {['kg', 'lb', 'V', 'Wh', 'kv', 'T'].map(u => (
-                                                                        <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewTemplateUnit(u)}>{u}</Badge>
-                                                                    ))}
-                                                                </div>
-                                                            )}
-                                                            <Form.Control 
-                                                                type="text" 
-                                                                placeholder="Unit (e.g. mm)" 
-                                                                className="input-contrast p-2 small" 
-                                                                value={newTemplateUnit} 
-                                                                onChange={e => setNewTemplateUnit(e.target.value)} 
-                                                            />
-                                                        </Col>
-                                                        <Col md={3}>
-                                                            <InputGroup size="sm" className="shadow-sm">
+                                                            <Form.Group>
+                                                                <Form.Label className="extreme-small text-muted uppercase fw-bold mb-1 ms-1">Field Name*</Form.Label>
                                                                 <Form.Control 
                                                                     type="text" 
-                                                                    placeholder="Placeholder..." 
-                                                                    className="input-contrast p-2 small border-secondary" 
-                                                                    value={newTemplatePlaceholder} 
-                                                                    onChange={e => setNewTemplatePlaceholder(e.target.value)} 
-                                                                    style={newTemplateType === 'dimension' ? { borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}}
+                                                                    placeholder="e.g. Weight" 
+                                                                    className="bg-black text-white border-secondary p-2 small transition-all focus-info" 
+                                                                    value={newTemplateKey} 
+                                                                    onChange={e => setNewTemplateKey(e.target.value)} 
                                                                 />
-                                                                {newTemplateType === 'dimension' && (
-                                                                    <InputGroup.Text className="input-contrast border-secondary border-start-0 text-info opacity-75 extreme-small fw-bold" style={{ backgroundColor: 'transparent' }}>
-                                                                        {newTemplateUnit || 'mm'}
-                                                                    </InputGroup.Text>
-                                                                )}
-                                                            </InputGroup>
+                                                            </Form.Group>
+                                                        </Col>
+                                                        <Col md={2}>
+                                                            <Form.Group>
+                                                                <Form.Label className="extreme-small text-muted uppercase fw-bold mb-1 ms-1">Input Type</Form.Label>
+                                                                <Form.Select 
+                                                                    className="bg-black text-white border-secondary p-2 small cursor-pointer" 
+                                                                    value={newTemplateType}
+                                                                    onChange={e => {
+                                                                        const val = e.target.value as 'text' | 'dimension';
+                                                                        setNewTemplateType(val);
+                                                                        if (val === 'text') {
+                                                                            setNewTemplateUnit("");
+                                                                            setNewTemplateIsBearing(false);
+                                                                        } else {
+                                                                            setNewTemplateUnit("mm");
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <option value="dimension">Dimension (Number)</option>
+                                                                    <option value="text">Label Box (Other)</option>
+                                                                </Form.Select>
+                                                            </Form.Group>
+                                                        </Col>
+                                                        <Col md={1} className="d-flex align-items-end pb-2">
+                                                            <div className="d-flex flex-column gap-2 mb-1">
+                                                                <Form.Check 
+                                                                    type="checkbox" 
+                                                                    label={<span className="text-info extreme-small fw-bold text-uppercase italic">Primary</span>}
+                                                                    className="ms-1"
+                                                                    checked={newTemplateIsPrimary}
+                                                                    onChange={e => setNewTemplateIsPrimary(e.target.checked)}
+                                                                />
+                                                            </div>
+                                                        </Col>
+                                                        <Col md={2} className="position-relative">
+                                                            <Form.Group>
+                                                                <Form.Label className="extreme-small text-muted uppercase fw-bold mb-1 ms-1">Field Unit</Form.Label>
+                                                                {/* Primary Quick-links Above */}
+                                                                <div className="d-flex gap-1 position-absolute" style={{ top: '-4px', right: '4px', zIndex: 10 }}>
+                                                                    {['mm', 'cm', 'in'].map(u => (
+                                                                        <Badge key={u} bg={newTemplateUnit === u ? "info" : "secondary"} className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => { setNewTemplateUnit(u); setNewTemplateType('dimension'); }}>{u}</Badge>
+                                                                    ))}
+                                                                </div>
+                                                                
+                                                                <Form.Control 
+                                                                    type="text" 
+                                                                    placeholder="mm, kg, etc." 
+                                                                    className="bg-black text-white border-secondary p-2 small text-center" 
+                                                                    value={newTemplateUnit} 
+                                                                    onChange={e => setNewTemplateUnit(e.target.value)} 
+                                                                />
+
+                                                                {/* Secondary Quick-links Below */}
+                                                                <div className="d-flex flex-wrap gap-1 position-absolute" style={{ bottom: '-15px', left: '4px', zIndex: 10, width: 'max-content' }}>
+                                                                    <Badge bg={newTemplateIsBearing ? "primary" : "secondary"} className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => {
+                                                                        const next = !newTemplateIsBearing;
+                                                                        setNewTemplateIsBearing(next);
+                                                                        if (next) {
+                                                                            if (!newTemplateKey) setNewTemplateKey("Bearing Size");
+                                                                            if (newTemplateUnit !== 'in') setNewTemplateUnit("mm");
+                                                                            setNewTemplateType('dimension');
+                                                                        }
+                                                                    }}>Bearing</Badge>
+                                                                    {['kg', 'lb', 'V', 'Wh', 'kv', 'T'].map(u => (
+                                                                        <Badge key={u} bg={newTemplateUnit === u ? "info" : "secondary"} className="cursor-pointer extreme-small opacity-50 hover-opacity-100" onClick={() => {
+                                                                            setNewTemplateUnit(u);
+                                                                            setNewTemplateType('text');
+                                                                            setNewTemplateIsBearing(false);
+                                                                        }}>{u}</Badge>
+                                                                    ))}
+                                                                </div>
+                                                            </Form.Group>
                                                         </Col>
                                                         <Col md={4}>
-                                                            <Form.Control 
-                                                                type="text" 
-                                                                placeholder="Helper Image URL (Optional)" 
-                                                                className="input-contrast p-2 small" 
-                                                                value={newTemplateDiagramUrl} 
-                                                                onChange={e => setNewTemplateDiagramUrl(e.target.value)} 
-                                                            />
+                                                            <Form.Group>
+                                                                <Form.Label className="extreme-small text-muted uppercase fw-bold mb-1 ms-1">Field Placeholder</Form.Label>
+                                                                <InputGroup size="sm" className="shadow-sm">
+                                                                    <Form.Control 
+                                                                        type="text" 
+                                                                        placeholder="e.g. 44..." 
+                                                                        className="bg-black text-white p-2 small border-secondary" 
+                                                                        value={newTemplatePlaceholder} 
+                                                                        onChange={e => setNewTemplatePlaceholder(e.target.value)} 
+                                                                        style={newTemplateType === 'dimension' ? { borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}}
+                                                                    />
+                                                                    {newTemplateType === 'dimension' && (
+                                                                        <InputGroup.Text className="bg-transparent border-secondary border-start-0 text-info opacity-75 extreme-small fw-bold">
+                                                                            {newTemplateUnit || 'mm'}
+                                                                        </InputGroup.Text>
+                                                                    )}
+                                                                </InputGroup>
+                                                            </Form.Group>
                                                         </Col>
-                                                        <Col md={2} className="d-flex gap-2">
-                                                            <Button variant={editingTemplateFieldIndex !== null ? "success" : "info"} className="w-100 fw-bold small py-2" onClick={handleAddTemplateField} disabled={!newTemplateKey.trim()}>
-                                                                {editingTemplateFieldIndex !== null ? 'Update Field' : 'Add Field'}
+                                                        
+                                                        <Col md={9}>
+                                                            <Form.Group>
+                                                                <Form.Label className="extreme-small text-info uppercase fw-bold mb-1 ms-1 d-flex justify-content-between">
+                                                                    <span>Helper Diagram / Measurement Guide</span>
+                                                                    <span className="text-muted opacity-50">Upload file OR paste direct link</span>
+                                                                </Form.Label>
+                                                                <InputGroup size="sm" className="shadow-sm border border-secondary rounded overflow-hidden">
+                                                                    <div className="position-relative bg-black d-flex align-items-center px-3 border-end border-secondary" style={{ minWidth: '140px' }}>
+                                                                        <Form.Control 
+                                                                            type="file" 
+                                                                            className="position-absolute opacity-0 w-100 h-100 cursor-pointer" 
+                                                                            style={{ left: 0, top: 0 }}
+                                                                            accept="image/*"
+                                                                            onChange={(e: any) => e.target.files[0] && handleDiagramUpload(e.target.files[0])}
+                                                                            disabled={isUploadingDiagram}
+                                                                        />
+                                                                        <span className="text-info extreme-small fw-bold uppercase letter-spacing-1">
+                                                                            {isUploadingDiagram ? <Spinner animation="border" size="sm" className="me-2" /> : '📁 Upload File'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <Form.Control 
+                                                                        type="text" 
+                                                                        placeholder="https://example.com/diagram.png" 
+                                                                        className="bg-black text-white p-2 small border-0" 
+                                                                        value={newTemplateDiagramUrl} 
+                                                                        onChange={e => setNewTemplateDiagramUrl(e.target.value)} 
+                                                                    />
+                                                                    {newTemplateDiagramUrl && (
+                                                                        <InputGroup.Text className="bg-dark border-0 p-0 overflow-hidden" style={{ width: '42px' }}>
+                                                                            <img src={newTemplateDiagramUrl} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                                                        </InputGroup.Text>
+                                                                    )}
+                                                                </InputGroup>
+                                                            </Form.Group>
+                                                        </Col>
+
+                                                        <Col md={3} className="d-flex align-items-end gap-2">
+                                                            <Button variant={editingTemplateFieldIndex !== null ? "success" : "info"} className="w-100 fw-bold small py-2 shadow-sm" onClick={handleAddTemplateField} disabled={!newTemplateKey.trim() || isUploadingDiagram}>
+                                                                {editingTemplateFieldIndex !== null ? 'UPDATE' : 'ADD FIELD'}
                                                             </Button>
                                                             {editingTemplateFieldIndex !== null && (
-                                                                <Button variant="outline-secondary" className="small py-2" onClick={handleCancelTemplateEdit}>Cancel</Button>
+                                                                <Button variant="outline-secondary" className="small py-2 px-3 border-secondary" onClick={handleCancelTemplateEdit} disabled={isUploadingDiagram}>Cancel</Button>
                                                             )}
                                                         </Col>
                                                     </Row>
@@ -1976,11 +2175,13 @@ export default function AdminPage() {
                                 <div className="d-flex align-items-center gap-3">
                                     <span className="small fw-bold text-muted uppercase letter-spacing-1">Filter Category:</span>
                                     <Form.Select 
-                                        className="bg-black text-white border-secondary small py-1 px-3 fw-bold" 
-                                        style={{ width: 'auto', minWidth: '200px' }}
+                                        className="bg-black text-white border-secondary py-3 px-4 fw-bold shadow-sm" 
+                                        style={{ width: 'auto', minWidth: '350px', fontSize: '1.1rem' }}
                                         value={selectedAttributeCategory} 
                                         onChange={e => setSelectedAttributeCategory(e.target.value)}
                                     >
+                                        <option value="all">📁 All Categories / Global Search</option>
+                                        <option disabled>──────────</option>
                                         {partCategories.map(cat => (
                                             <option key={cat.id} value={cat.id}>{cat.name}</option>
                                         ))}
@@ -2011,12 +2212,27 @@ export default function AdminPage() {
                                                         <span className="text-info font-monospace fw-bold">{attr.key}</span>
                                                     </td>
                                                     <td className="py-3 text-center align-middle">
-                                                        <Badge bg="secondary" className="px-3 py-2 border border-secondary">{attr.count} uses</Badge>
+                                                        <Badge 
+                                                            bg="secondary" 
+                                                            className="px-3 py-2 border border-secondary cursor-pointer transition-all hover-opacity-75"
+                                                            title={`Filter registry for "${attr.key}"`}
+                                                            onClick={() => {
+                                                                setActiveAttributeFilter(attr.key);
+                                                                handleTabSelect('registry');
+                                                            }}
+                                                        >
+                                                            {attr.count} uses
+                                                        </Badge>
                                                     </td>
                                                     <td className="py-3 pe-4 text-end align-middle">
-                                                        <Button variant="outline-light" size="sm" className="fw-bold" onClick={() => { setTargetAttributeKey(attr.key); setNewAttributeKey(attr.key); setShowAttributeMergeModal(true); }}>
-                                                            Rename / Merge
-                                                        </Button>
+                                                        <div className="d-flex justify-content-end gap-2">
+                                                            <Button variant="outline-light" size="sm" className="fw-bold px-3 py-2" onClick={() => { setTargetAttributeKey(attr.key); setNewAttributeKey(attr.key); setShowAttributeMergeModal(true); }}>
+                                                                Rename / Merge
+                                                            </Button>
+                                                            <Button variant="outline-danger" size="sm" className="fw-bold px-3 py-2" onClick={() => handlePurgeAttribute(attr.key)}>
+                                                                Purge / Delete
+                                                            </Button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
@@ -2228,11 +2444,8 @@ export default function AdminPage() {
                                     <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
                                         {(() => {
                                             const activeCat = partCategories.find(c => c.id === editingPart.category_id);
-                                            const templateKeys = activeCat?.template_fields?.map((tf: any) => tf.key) || [];
                                             const attributes = editingPart.attributes || {};
-                                            
                                             const templateFields = activeCat?.template_fields || [];
-                                            const customKeys = Object.keys(attributes).filter(k => !templateKeys.includes(k) && !k.endsWith('__unit'));
 
                                             return (
                                                 <>
@@ -2240,92 +2453,134 @@ export default function AdminPage() {
                                                     {templateFields.length > 0 && (
                                                         <div className="mb-4">
                                                             <div className="text-info extreme-small fw-bold text-uppercase mb-3 opacity-50">Category Template Fields</div>
-                                                            <Row className="g-3">
+                                                            <div className="d-flex flex-column gap-1 mb-4">
                                                                 {templateFields.map((tf: any) => (
-                                                                    <Col md={6} key={tf.key}>
-                                                                        <Form.Group>
-                                                                            <Form.Label className="extreme-small text-light uppercase fw-bold mb-1 d-flex justify-content-between">
-                                                                                {tf.key} {tf.unit && <span className="text-muted">({tf.unit})</span>}
+                                                                    <div key={tf.key} className="d-flex align-items-center justify-content-between py-2 border-bottom border-secondary border-opacity-10">
+                                                                        <div className="d-flex align-items-center gap-2">
+                                                                            <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-0">
+                                                                                {tf.key} {tf.unit && !tf.is_bearing ? <span className="text-primary">({tf.unit})</span> : ''}
                                                                             </Form.Label>
-                                                                            <Form.Control 
-                                                                                type="text"
-                                                                                className="bg-dark text-white border-secondary p-2 small"
-                                                                                value={attributes[tf.key] || ''}
-                                                                                onChange={e => {
-                                                                                    const newAttrs = { ...attributes, [tf.key]: e.target.value };
-                                                                                    if (tf.unit) newAttrs[`${tf.key}__unit`] = tf.unit;
-                                                                                    setEditingPart({ ...editingPart, attributes: newAttrs });
-                                                                                }}
-                                                                            />
-                                                                        </Form.Group>
-                                                                    </Col>
+                                                                        </div>
+                                                                        <div className="d-flex align-items-center gap-3">
+                                                                            <div style={{ width: tf.is_bearing ? '280px' : (tf.type === 'dimension' ? '240px' : '180px') }} className="d-flex align-items-center">
+                                                                                {tf.is_bearing ? (
+                                                                                    <div className="d-flex align-items-center gap-1 w-100">
+                                                                                        {(() => {
+                                                                                            const bVal = attributes[tf.key] || "0x0x0";
+                                                                                            const [bid, bod, bw] = bVal.split('x');
+                                                                                            const updateBearing = (newVal: string, idx: number) => {
+                                                                                                const parts = bVal.split('x');
+                                                                                                parts[idx] = newVal || '0';
+                                                                                                const finalVal = parts.join('x');
+                                                                                                const newAttrs = { ...attributes, [tf.key]: finalVal };
+                                                                                                newAttrs[`${tf.key}__unit`] = attributeDimensionUnits[tf.key] || 'mm';
+                                                                                                setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                            };
+                                                                                            return (
+                                                                                                <>
+                                                                                                    <Form.Control size="sm" placeholder="ID" className="bg-black text-white border-secondary p-1 small text-center flex-grow-1" value={bid === '0' ? '' : bid} onChange={e => updateBearing(e.target.value, 0)} />
+                                                                                                    <span className="text-secondary tiny">×</span>
+                                                                                                    <Form.Control size="sm" placeholder="OD" className="bg-black text-white border-secondary p-1 small text-center flex-grow-1" value={bod === '0' ? '' : bod} onChange={e => updateBearing(e.target.value, 1)} />
+                                                                                                    <span className="text-secondary tiny">×</span>
+                                                                                                    <Form.Control size="sm" placeholder="W" className="bg-black text-white border-secondary p-1 small text-center flex-grow-1" value={bw === '0' ? '' : bw} onChange={e => updateBearing(e.target.value, 2)} />
+                                                                                                    <Button 
+                                                                                                        variant="outline-secondary" 
+                                                                                                        size="sm" 
+                                                                                                        className="fw-bold extreme-small border-secondary ms-1 px-1" 
+                                                                                                        style={{ minHeight: '31px', color: '#06b6d4' }}
+                                                                                                        onClick={() => {
+                                                                                                            const current = attributeDimensionUnits[tf.key] || 'mm';
+                                                                                                            const next = current === 'mm' ? 'in' : 'mm';
+                                                                                                            setAttributeDimensionUnits(prev => ({ ...prev, [tf.key]: next }));
+                                                                                                            const newAttrs = { ...(editingPart.attributes as any), [`${tf.key}__unit`]: next };
+                                                                                                            setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                                        }}
+                                                                                                    >
+                                                                                                        {attributeDimensionUnits[tf.key] || 'mm'}
+                                                                                                    </Button>
+                                                                                                </>
+                                                                                            );
+                                                                                        })()}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="input-group input-group-sm">
+                                                                                        <Form.Control
+                                                                                            type={(tf.type === 'dimension') ? 'number' : 'text'}
+                                                                                            step="any"
+                                                                                            placeholder={tf.placeholder || (tf.type === 'dimension' ? "44" : "")}
+                                                                                            value={attributes[tf.key] || ""}
+                                                                                            onChange={e => {
+                                                                                                const newAttrs = { ...attributes, [tf.key]: e.target.value };
+                                                                                                const unit = tf.type === 'dimension' ? (attributeDimensionUnits[tf.key] || 'mm') : tf.unit;
+                                                                                                if (unit) newAttrs[`${tf.key}__unit`] = unit;
+                                                                                                setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                            }}
+                                                                                            className="input-contrast text-white p-2 shadow-sm border-secondary text-end"
+                                                                                            style={{ borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                                                                                        />
+                                                                                        {tf.type === 'dimension' && (
+                                                                                            <Button 
+                                                                                                variant="outline-secondary" 
+                                                                                                size="sm" 
+                                                                                                className="fw-bold extreme-small border-secondary border-start-0" 
+                                                                                                style={{ minWidth: '40px', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, backgroundColor: 'transparent', color: '#06b6d4' }}
+                                                                                                onClick={() => {
+                                                                                                    const current = attributeDimensionUnits[tf.key] || 'mm';
+                                                                                                    const next = current === 'mm' ? 'cm' : current === 'cm' ? 'in' : 'mm';
+                                                                                                    setAttributeDimensionUnits(prev => ({ ...prev, [tf.key]: next }));
+                                                                                                    const newAttrs = { ...(editingPart.attributes as any), [`${tf.key}__unit`]: next };
+                                                                                                    setEditingPart({ ...editingPart, attributes: newAttrs });
+                                                                                                }}
+                                                                                            >
+                                                                                                {attributeDimensionUnits[tf.key] || 'mm'}
+                                                                                            </Button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            {tf.diagram_url ? (
+                                                                                <div 
+                                                                                    className="rounded border border-secondary border-opacity-10 shadow-sm overflow-hidden d-flex align-items-center justify-content-center bg-white position-relative" 
+                                                                                    style={{ 
+                                                                                        width: attributeZoomedFields[tf.key] ? '240px' : '120px', 
+                                                                                        height: attributeZoomedFields[tf.key] ? '240px' : '120px', 
+                                                                                        flexShrink: 0,
+                                                                                        transition: 'all 0.2s ease-in-out',
+                                                                                        cursor: 'pointer'
+                                                                                    }}
+                                                                                    onClick={() => setAttributeZoomedFields(prev => ({ ...prev, [tf.key]: !prev[tf.key] }))}
+                                                                                    title="Click to toggle zoom"
+                                                                                >
+                                                                                    <img 
+                                                                                        src={tf.diagram_url} 
+                                                                                        alt="Guide" 
+                                                                                        style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                                                                                    />
+                                                                                    <div 
+                                                                                        className="position-absolute bottom-0 end-0 p-1 opacity-0 hover-opacity-100 transition-opacity"
+                                                                                        style={{ backgroundColor: 'rgba(0,0,0,0.6)', pointerEvents: 'none' }}
+                                                                                    >
+                                                                                        <span className="text-white extreme-small fw-bold px-1">{attributeZoomedFields[tf.key] ? '×1' : '🔍'}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div style={{ width: '120px', height: '120px' }} />
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 ))}
-                                                            </Row>
+                                                            </div>
                                                         </div>
                                                     )}
 
-                                                    {/* Custom Fields */}
+                                                    {/* Custom Fields & Add Generic Field */}
                                                     <div className="mb-2">
                                                         <div className="text-warning extreme-small fw-bold text-uppercase mb-3 opacity-50">Custom Specifications</div>
-                                                        {customKeys.length === 0 ? (
-                                                            <div className="text-muted small italic opacity-50 py-2">No custom attributes assigned.</div>
-                                                        ) : (
-                                                            <Row className="g-3">
-                                                                {customKeys.map(k => (
-                                                                    <Col md={6} key={k}>
-                                                                        <Form.Group>
-                                                                            <Form.Label className="extreme-small text-light uppercase fw-bold mb-1 d-flex justify-content-between">
-                                                                                {k} <span className="text-muted">({attributes[`${k}__unit`] || 'value'})</span>
-                                                                            </Form.Label>
-                                                                            <InputGroup>
-                                                                                <Form.Control 
-                                                                                    type="text"
-                                                                                    className="bg-dark text-white border-secondary p-2 small"
-                                                                                    value={attributes[k] || ''}
-                                                                                    onChange={e => {
-                                                                                        const newAttrs = { ...attributes, [k]: e.target.value };
-                                                                                        setEditingPart({ ...editingPart, attributes: newAttrs });
-                                                                                    }}
-                                                                                />
-                                                                                <Button variant="outline-danger" size="sm" className="px-2" onClick={() => {
-                                                                                    const newAttrs = { ...attributes };
-                                                                                    delete newAttrs[k];
-                                                                                    delete newAttrs[`${k}__unit`];
-                                                                                    setEditingPart({ ...editingPart, attributes: newAttrs });
-                                                                                }}>×</Button>
-                                                                            </InputGroup>
-                                                                        </Form.Group>
-                                                                    </Col>
-                                                                ))}
-                                                            </Row>
-                                                        )}
-                                                    </div>
-                                                    
-                                                    {/* Add Generic Field */}
-                                                    <div className="mt-4 pt-3 border-top border-secondary border-opacity-10 d-flex gap-2">
-                                                         <Form.Control 
-                                                            id="new-admin-attr-key" 
-                                                            placeholder="New Generic Spec Key..." 
-                                                            className="bg-dark text-white border-secondary p-2 small flex-grow-1" 
-                                                            onKeyDown={e => {
-                                                                if (e.key === 'Enter') {
-                                                                    e.preventDefault();
-                                                                    const btn = document.getElementById('add-admin-attr-btn');
-                                                                    btn?.click();
-                                                                }
-                                                            }}
+                                                        <SharedAttributeEditor
+                                                            attributes={attributes}
+                                                            onChange={(newAttrs) => setEditingPart({ ...editingPart, attributes: newAttrs })}
+                                                            templateFields={templateFields || []}
                                                         />
-                                                         <Button id="add-admin-attr-btn" variant="outline-info" size="sm" className="fw-bold text-uppercase px-3" onClick={() => {
-                                                             const keyInput = document.getElementById('new-admin-attr-key') as HTMLInputElement;
-                                                             const key = keyInput?.value?.trim();
-                                                             if (key) {
-                                                                 setEditingPart({
-                                                                     ...editingPart,
-                                                                     attributes: { ...attributes, [key]: '' }
-                                                                 });
-                                                                 keyInput.value = '';
-                                                             }
-                                                         }}>+ Add Spec</Button>
                                                     </div>
                                                 </>
                                             );

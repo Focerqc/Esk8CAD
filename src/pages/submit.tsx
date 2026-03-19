@@ -8,6 +8,7 @@ import SiteNavbar from "../components/SiteNavbar"
 import SiteMetaData from "../components/SiteMetaData"
 import ClientOnly from "../components/ClientOnly"
 import HardwareFields from "../components/Forms/HardwareFields"
+import SharedAttributeEditor from "../components/Forms/SharedAttributeEditor"
 import { useBrandHardware } from "../hooks/useBrandHardware"
 import { getSupabaseClient } from '../lib/supabase'
 
@@ -112,20 +113,14 @@ const PartFormItem = ({
     const [showAllAttributes, setShowAllAttributes] = useState(false);
     const [zoomedFields, setZoomedFields] = useState<Record<string, boolean>>({});
     const [hasUnsavedHardware, setHasUnsavedHardware] = useState(false);
-
-    // New Custom Attribute local states
-    const [newCustomKey, setNewCustomKey] = useState("");
-    const [newCustomType, setNewCustomType] = useState<'text' | 'dimension'>("dimension");
-    const [newCustomUnit, setNewCustomUnit] = useState("mm");
-    const [newCustomValue, setNewCustomValue] = useState("");
+    const [hasUnsavedCustomAttr, setHasUnsavedCustomAttr] = useState(false);
 
     // Report unsaved state to parent
     useEffect(() => {
         if (onUnsavedChange) {
-            const hasUnsavedCustomAttr = (newCustomKey.trim().length > 0 || newCustomValue.trim().length > 0);
             onUnsavedChange(hasUnsavedCustomAttr || hasUnsavedHardware);
         }
-    }, [newCustomKey, newCustomValue, hasUnsavedHardware, onUnsavedChange]);
+    }, [hasUnsavedCustomAttr, hasUnsavedHardware, onUnsavedChange]);
 
     // Watch fields for this specific array item
     const partValues = watch(`parts.${index}`)
@@ -570,54 +565,97 @@ const PartFormItem = ({
                                         const primaryFields = templateFields.filter((f: any) => f.is_primary);
                                         const secondaryFields = templateFields.filter((f: any) => !f.is_primary);
                                         
-                                        // If no fields are marked primary at all, treat them all as primary for this view
                                         const visibleFields = primaryFields.length > 0 ? primaryFields : templateFields;
                                         const hiddenFields = primaryFields.length > 0 ? secondaryFields : [];
-
                                         const renderField = (fieldDef: any) => (
                                             <div key={fieldDef.key} className="d-flex align-items-center justify-content-between py-2 border-bottom border-secondary border-opacity-10">
                                                 <div className="d-flex align-items-center gap-2">
                                                     <Form.Label className="small uppercase fw-bold opacity-75 text-light mb-0">
-                                                        {fieldDef.key} {fieldDef.unit ? <span className="text-primary">({fieldDef.unit})</span> : ''}
+                                                        {fieldDef.key} {fieldDef.unit && !fieldDef.is_bearing ? <span className="text-primary">({fieldDef.unit})</span> : ''}
                                                     </Form.Label>
                                                 </div>
                                                 <div className="d-flex align-items-center gap-3">
-                                                    <div style={{ width: fieldDef.type === 'dimension' ? '240px' : '180px' }} className="d-flex align-items-center">
-                                                        <Controller
-                                                            control={control}
-                                                            name={`parts.${index}.attributes.${fieldDef.key}` as any}
-                                                            render={({ field }) => (
-                                                                <div className="input-group input-group-sm">
-                                                                    <Form.Control
-                                                                        {...field}
-                                                                        type={(fieldDef.type === 'dimension') ? 'number' : 'text'}
-                                                                        step="any"
-                                                                        placeholder={fieldDef.placeholder || (fieldDef.type === 'dimension' ? "44" : "")}
-                                                                        value={field.value || ""}
-                                                                        className="input-contrast text-white p-2 shadow-sm border-secondary text-end"
-                                                                        style={{ borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
-                                                                    />
-                                                                    {fieldDef.type === 'dimension' && (
-                                                                        <Button 
-                                                                            variant="outline-secondary" 
-                                                                            size="sm" 
-                                                                            className="fw-bold extreme-small border-secondary border-start-0" 
-                                                                            style={{ minWidth: '40px', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, backgroundColor: 'transparent', color: '#06b6d4' }}
-                                                                            onClick={() => {
-                                                                                const current = dimensionUnits[`${index}-${fieldDef.key}`] || 'mm';
-                                                                                const next = current === 'mm' ? 'cm' : current === 'cm' ? 'in' : 'mm';
-                                                                                setDimensionUnits(prev => ({
-                                                                                    ...prev,
-                                                                                    [`${index}-${fieldDef.key}`]: next
-                                                                                }));
+                                                    <div style={{ width: fieldDef.is_bearing ? '280px' : (fieldDef.type === 'dimension' ? '240px' : '180px') }} className="d-flex align-items-center">
+                                                        {fieldDef.is_bearing ? (
+                                                            <Controller
+                                                                control={control}
+                                                                name={`parts.${index}.attributes.${fieldDef.key}` as any}
+                                                                render={({ field }) => {
+                                                                    const bVal = field.value || "0x0x0";
+                                                                    const [bid, bod, bw] = bVal.split('x');
+                                                                    const updateBearing = (newVal: string, idx: number) => {
+                                                                        const parts = bVal.split('x');
+                                                                        parts[idx] = newVal || '0';
+                                                                        const finalVal = parts.join('x');
+                                                                        field.onChange(finalVal);
+                                                                        const currentUnit = dimensionUnits[`${index}-${fieldDef.key}`] || 'mm';
+                                                                        setValue(`parts.${index}.attributes.${fieldDef.key}__unit` as any, currentUnit);
+                                                                    };
+                                                                    return (
+                                                                        <div className="d-flex align-items-center gap-1 w-100">
+                                                                            <Form.Control size="sm" placeholder="ID" className="bg-black text-white border-secondary p-1 small text-center flex-grow-1" value={bid === '0' ? '' : bid} onChange={e => updateBearing(e.target.value, 0)} />
+                                                                            <span className="text-secondary tiny">×</span>
+                                                                            <Form.Control size="sm" placeholder="OD" className="bg-black text-white border-secondary p-1 small text-center flex-grow-1" value={bod === '0' ? '' : bod} onChange={e => updateBearing(e.target.value, 1)} />
+                                                                            <span className="text-secondary tiny">×</span>
+                                                                            <Form.Control size="sm" placeholder="W" className="bg-black text-white border-secondary p-1 small text-center flex-grow-1" value={bw === '0' ? '' : bw} onChange={e => updateBearing(e.target.value, 2)} />
+                                                                            <Button 
+                                                                                variant="outline-secondary" 
+                                                                                size="sm" 
+                                                                                className="fw-bold extreme-small border-secondary ms-1 px-1" 
+                                                                                style={{ minHeight: '31px', color: '#06b6d4' }}
+                                                                                onClick={() => {
+                                                                                    const current = dimensionUnits[`${index}-${fieldDef.key}`] || 'mm';
+                                                                                    const next = current === 'mm' ? 'in' : 'mm';
+                                                                                    setDimensionUnits(prev => ({ ...prev, [`${index}-${fieldDef.key}`]: next }));
+                                                                                    setValue(`parts.${index}.attributes.${fieldDef.key}__unit` as any, next);
+                                                                                }}
+                                                                            >
+                                                                                {dimensionUnits[`${index}-${fieldDef.key}`] || 'mm'}
+                                                                            </Button>
+                                                                        </div>
+                                                                    );
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <Controller
+                                                                control={control}
+                                                                name={`parts.${index}.attributes.${fieldDef.key}` as any}
+                                                                render={({ field }) => (
+                                                                    <div className="input-group input-group-sm">
+                                                                        <Form.Control
+                                                                            {...field}
+                                                                            type={(fieldDef.type === 'dimension') ? 'number' : 'text'}
+                                                                            step="any"
+                                                                            placeholder={fieldDef.placeholder || (fieldDef.type === 'dimension' ? "44" : "")}
+                                                                            value={field.value || ""}
+                                                                            onChange={e => {
+                                                                                field.onChange(e.target.value);
+                                                                                const unit = fieldDef.type === 'dimension' ? (dimensionUnits[`${index}-${fieldDef.key}`] || 'mm') : fieldDef.unit;
+                                                                                if (unit) setValue(`parts.${index}.attributes.${fieldDef.key}__unit` as any, unit);
                                                                             }}
-                                                                        >
-                                                                            {dimensionUnits[`${index}-${fieldDef.key}`] || 'mm'}
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                            )}
-                                                        />
+                                                                            className="input-contrast text-white p-2 shadow-sm border-secondary text-end"
+                                                                            style={{ borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
+                                                                        />
+                                                                        {fieldDef.type === 'dimension' && (
+                                                                            <Button 
+                                                                                variant="outline-secondary" 
+                                                                                size="sm" 
+                                                                                className="fw-bold extreme-small border-secondary border-start-0" 
+                                                                                style={{ minWidth: '40px', borderTopLeftRadius: 0, borderBottomLeftRadius: 0, backgroundColor: 'transparent', color: '#06b6d4' }}
+                                                                                onClick={() => {
+                                                                                    const current = dimensionUnits[`${index}-${fieldDef.key}`] || 'mm';
+                                                                                    const next = current === 'mm' ? 'cm' : current === 'cm' ? 'in' : 'mm';
+                                                                                    setDimensionUnits(prev => ({ ...prev, [`${index}-${fieldDef.key}`]: next }));
+                                                                                    setValue(`parts.${index}.attributes.${fieldDef.key}__unit` as any, next);
+                                                                                }}
+                                                                            >
+                                                                                {dimensionUnits[`${index}-${fieldDef.key}`] || 'mm'}
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
+                                                                )}
+                                                            />
+                                                        )}
                                                     </div>
                                                     {fieldDef.diagram_url ? (
                                                         <div 
@@ -654,7 +692,6 @@ const PartFormItem = ({
                                         return (
                                             <div className="d-flex flex-column gap-1 mb-4">
                                                 {visibleFields.map(renderField)}
-                                                
                                                 {hiddenFields.length > 0 && (
                                                     <div className="mt-2">
                                                         {showAllAttributes && hiddenFields.map(renderField)}
@@ -677,117 +714,14 @@ const PartFormItem = ({
                                         <Controller
                                             control={control}
                                             name={`parts.${index}.attributes` as any}
-                                            render={({ field }) => {
-                                                const currentAttrs = field.value || {};
-                                                const customKeys = Object.keys(currentAttrs).filter(k => !(templateFields || []).find((tf: any) => tf.key === k));
-                                                return (
-                                                    <div className="d-flex flex-column gap-2 mb-2">
-                                                        {customKeys.map(k => {
-                                                            const isDim = dimensionTypes[`${index}-${k}`] === 'dimension';
-                                                            const unit = dimensionUnits[`${index}-${k}`] || ''; // Default to empty string if no unit
-                                                            return (
-                                                                <div key={k} className="bg-secondary bg-opacity-10 p-2 rounded d-flex justify-content-between align-items-center border border-secondary border-opacity-25 shadow-sm mb-1">
-                                                                    <div className="d-flex align-items-center gap-3">
-                                                                        <Badge bg={isDim ? "info" : "secondary"} className={`${isDim ? 'text-dark' : 'text-light'} extreme-small px-2 py-1`}>{isDim ? 'DIMENSION' : 'OTHER UNITS'}</Badge>
-                                                                        <span className="text-white small fw-bold">{k}:</span>
-                                                                        <span className="text-info small">{currentAttrs[k]} {unit && <span className="text-muted ms-1 italic" style={{ fontSize: '0.7rem' }}>{unit}</span>}</span>
-                                                                    </div>
-                                                                    <Button variant="link" className="text-danger p-0 px-2 text-decoration-none fw-bold hover-opacity-100 opacity-50" onClick={() => {
-                                                                        const newAttrs = { ...currentAttrs };
-                                                                        delete newAttrs[k];
-                                                                        field.onChange(newAttrs);
-                                                                    }}>×</Button>
-                                                                </div>
-                                                            );
-                                                        })}
-
-                                                        <div className="p-3 bg-black bg-opacity-25 rounded border border-secondary border-opacity-25 mt-2 shadow-sm">
-                                                            <h6 className="text-info extreme-small fw-bold text-uppercase mb-3 italic">Add Custom Specification</h6>
-                                                            <Row className="g-2">
-                                                                <Col md={3}>
-                                                                    <Form.Control 
-                                                                        placeholder="Key (e.g. Weight)" 
-                                                                        className="input-contrast p-2 small border-secondary" 
-                                                                        value={newCustomKey}
-                                                                        onChange={e => setNewCustomKey(e.target.value)}
-                                                                    />
-                                                                </Col>
-                                                                <Col md={3}>
-                                                                    <Form.Select 
-                                                                        className="input-contrast p-2 small border-secondary"
-                                                                        value={newCustomType}
-                                                                        onChange={e => {
-                                                                            const val = e.target.value as 'text' | 'dimension';
-                                                                            setNewCustomType(val);
-                                                                            if (val === 'text') setNewCustomUnit("" as any);
-                                                                        }}
-                                                                    >
-                                                                        <option value="dimension">Dimension</option>
-                                                                        <option value="text">Other Units</option>
-                                                                    </Form.Select>
-                                                                </Col>
-                                                                <Col md={2} className="position-relative">
-                                                                    {newCustomType === 'dimension' && (
-                                                                        <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', zIndex: 10 }}>
-                                                                            {['mm', 'cm', 'in'].map(u => (
-                                                                                <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewCustomUnit(u)}>{u}</Badge>
-                                                                            ))}
-                                                                        </div>
-                                                                    )}
-                                                                    {newCustomType === 'text' && (
-                                                                        <div className="d-flex gap-1 position-absolute" style={{ top: '-18px', left: '8px', width: 'max-content', zIndex: 10 }}>
-                                                                            {['kg', 'lb', 'V', 'Wh', 'kv', 'T'].map(u => (
-                                                                                <Badge key={u} bg="secondary" className="cursor-pointer extreme-small opacity-75 hover-opacity-100" onClick={() => setNewCustomUnit(u)}>{u}</Badge>
-                                                                            ))}
-                                                                        </div>
-                                                                    )}
-                                                                    <Form.Control 
-                                                                        placeholder="Unit" 
-                                                                        className="input-contrast p-2 small border-secondary text-center" 
-                                                                        value={newCustomUnit}
-                                                                        onChange={e => setNewCustomUnit(e.target.value as any)}
-                                                                    />
-                                                                </Col>
-                                                                <Col md={3}>
-                                                                    <InputGroup size="sm">
-                                                                        <Form.Control 
-                                                                            type={newCustomType === 'dimension' ? "number" : "text"}
-                                                                            step="any"
-                                                                            placeholder="Value..." 
-                                                                            className="input-contrast p-2 small border-secondary text-end" 
-                                                                            value={newCustomValue}
-                                                                            onChange={e => setNewCustomValue(e.target.value)}
-                                                                            style={(newCustomType === 'dimension' || newCustomUnit) ? { borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {}}
-                                                                        />
-                                                                        {(newCustomType === 'dimension' || newCustomUnit) && (
-                                                                            <InputGroup.Text className="input-contrast border-secondary border-start-0 text-info opacity-75 extreme-small fw-bold" style={{ backgroundColor: 'transparent' }}>
-                                                                                {newCustomUnit || (newCustomType === 'dimension' ? 'mm' : '')}
-                                                                            </InputGroup.Text>
-                                                                        )}
-                                                                    </InputGroup>
-                                                                </Col>
-                                                                <Col md={2}>
-                                                                    <Button 
-                                                                        variant="info" 
-                                                                        className="w-100 fw-bold small py-2 shadow-sm"
-                                                                        onClick={() => {
-                                                                            if (newCustomKey.trim() && newCustomValue.trim()) {
-                                                                                setDimensionTypes(prev => ({ ...prev, [`${index}-${newCustomKey.trim()}`]: newCustomType }));
-                                                                                if (newCustomType === 'dimension') {
-                                                                                    setDimensionUnits(prev => ({ ...prev, [`${index}-${newCustomKey.trim()}`]: newCustomUnit as any }));
-                                                                                }
-                                                                                field.onChange({ ...currentAttrs, [newCustomKey.trim()]: newCustomValue.trim() });
-                                                                                setNewCustomKey("");
-                                                                                setNewCustomValue("");
-                                                                            }
-                                                                        }}
-                                                                    >ADD</Button>
-                                                                </Col>
-                                                            </Row>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            }}
+                                            render={({ field }) => (
+                                                <SharedAttributeEditor
+                                                    attributes={field.value || {}}
+                                                    onChange={field.onChange}
+                                                    templateFields={templateFields || []}
+                                                    onUnsavedChange={setHasUnsavedCustomAttr}
+                                                />
+                                            )}
                                         />
                                     </div>
                                 </div>
@@ -1008,24 +942,23 @@ const SubmitPage: React.FC = () => {
 
                         // Also normalize custom attributes that are marked as dimensions or have custom units
                         Object.keys(p.attributes || {}).forEach(k => {
+                            if (k.endsWith('__unit')) return; // Skip the metadata keys
                             const isTemplateField = activeCat?.template_fields?.find((tf: any) => tf.key === k);
                             if (!isTemplateField) {
-                                // It's a custom attribute
-                                const unit = dimensionUnits[`${i}-${k}`] || '';
-                                const type = dimensionTypes[`${i}-${k}`];
+                                // It's a custom attribute, check its own __unit suffix
+                                const unit = attrs[`${k}__unit`] || '';
+                                const isDim = ['mm', 'cm', 'in'].includes(unit);
                                 const val = attrs[k];
 
                                 if (val) {
-                                    if (type === 'dimension') {
+                                    if (isDim) {
                                         const numVal = parseFloat(val);
                                         if (unit === 'in') {
                                             attrs[k] = (numVal * 25.4).toString();
                                         } else if (unit === 'cm') {
                                             attrs[k] = (numVal * 10).toString();
                                         }
-                                        attrs[`${k}__unit`] = 'mm';
-                                    } else if (unit) {
-                                        attrs[`${k}__unit`] = unit;
+                                        attrs[`${k}__unit`] = 'mm'; // Normalize dimensions to mm
                                     }
                                 }
                             }
