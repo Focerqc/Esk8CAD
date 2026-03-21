@@ -11,7 +11,38 @@ interface FilterSidebarProps {
 const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters, setActiveFilters }) => {
     
     // Sort templates: primary or common ones first, then alphabetically
-    const sortedTemplates = [...templates].sort((a, b) => a.key.localeCompare(b.key));
+    const sortedTemplates = [...templates].sort((a, b) => {
+        const priorityKeys = ['Brand', 'Model', 'Category'];
+        const aIdx = priorityKeys.indexOf(a.key);
+        const bIdx = priorityKeys.indexOf(b.key);
+        
+        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+        if (aIdx !== -1) return -1;
+        if (bIdx !== -1) return 1;
+        
+        return a.key.localeCompare(b.key);
+    });
+
+    const getSummary = (template: AttributeTemplate) => {
+        const { key, type, unit } = template;
+        const value = activeFilters[key];
+        if (!value) return null;
+
+        if (Array.isArray(value)) {
+            if (value.length === 0) return null;
+            if (value.length === 1) return value[0];
+            return `${value.length} Selected`;
+        }
+
+        if (typeof value === 'object') {
+            if (type === 'bearing_size') return "Filtered";
+            const { min, max } = value;
+            if (min !== undefined && max !== undefined) return `${min}-${max}${unit || ''}`;
+            if (min !== undefined) return `> ${min}${unit || ''}`;
+            if (max !== undefined) return `< ${max}${unit || ''}`;
+        }
+        return null;
+    };
 
     const handleCheckboxChange = (key: string, value: string, checked: boolean) => {
         setActiveFilters(prev => {
@@ -176,9 +207,16 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
                         return (
                             <Accordion.Item eventKey={String(i)} key={template.key} className="bg-transparent border-bottom border-zinc-800">
                                 <Accordion.Header>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <span className="fw-semibold uppercase small">{template.key}</span>
-                                        {hasFilter && <Badge bg="info" pill style={{ width: 8, height: 8, padding: 0 }}></Badge>}
+                                    <div className="d-flex align-items-center justify-content-between w-100 pe-3">
+                                        <div className="d-flex align-items-center gap-2">
+                                            <span className="fw-semibold uppercase small">{template.key}</span>
+                                            {hasFilter && <Badge bg="info" pill style={{ width: 6, height: 6, padding: 0 }}></Badge>}
+                                        </div>
+                                        {hasFilter && (
+                                            <span className="text-info extreme-small fw-bold opacity-75 text-truncate ms-1" style={{ maxWidth: '110px' }}>
+                                                {getSummary(template)}
+                                            </span>
+                                        )}
                                     </div>
                                 </Accordion.Header>
                                 <Accordion.Body className="pt-0 pb-3">

@@ -357,7 +357,7 @@ const CatalogPage: React.FC = () => {
 
                     <Row>
                         {/* Sidebar Column */}
-                        <Col lg={3} xl={2} className={`d-none d-lg-block sticky-top`} style={{ top: '80px', height: 'calc(100vh - 100px)', overflowY: 'auto' }}>
+                        <Col lg={3} xl={3} xxl={2} className={`d-none d-lg-block sticky-top`} style={{ top: '80px', height: 'calc(100vh - 100px)', overflowY: 'auto' }}>
                             <div className="sidebar-container bg-dark p-3 rounded-4 border border-secondary shadow-lg">
                                 <FilterSidebar 
                                     templates={fullAttributeTemplates} 
@@ -389,7 +389,7 @@ const CatalogPage: React.FC = () => {
                         </Offcanvas>
 
                         {/* Parts Grid Column */}
-                        <Col lg={9} xl={10} className="px-3">
+                        <Col lg={9} xl={9} xxl={10} className="px-3">
                             <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                                 <div className="d-flex align-items-center">
                                     <motion.h4 key={filteredParts.length} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 0.75 }} className="m-0">
