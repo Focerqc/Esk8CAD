@@ -11,6 +11,7 @@ export type Part = Tables['parts']['Row'] & {
   part_categories?: Pick<Tables['part_categories']['Row'], 'name' | 'slug'> | null;
   models?: Pick<Tables['models']['Row'], 'name' | 'slug'> | null;
   fabrication_methods?: Pick<Tables['fabrication_methods']['Row'], 'name' | 'slug'> | null;
+  attributes?: Record<string, any> | null;
 };
 
 export const useParts = (platform?: string, categorySlug?: string) => {
