@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Badge, Card, Col } from "react-bootstrap";
+import { Badge, Card } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import AttributeTooltip from "./AttributeTooltip";
 
@@ -12,10 +12,10 @@ export interface PartSchema {
     tags: string[];
     externalUrl?: string;
     dropboxUrl?: string;
-    brands?: { name: string; slug: string } | null;
-    part_categories?: { name: string; slug: string } | null;
-    fabrication_methods?: { name: string; slug: string } | null;
-    models?: { name: string; slug: string } | null;
+    brands?: { name: string; slug?: string | null } | null;
+    part_categories?: { name: string; slug?: string | null } | null;
+    fabrication_methods?: { name: string; slug?: string | null } | null;
+    models?: { name: string; slug?: string | null } | null;
     attributes?: Record<string, any> | null;
 }
 
@@ -23,13 +23,7 @@ const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
     const [imgError, setImgError] = useState(false);
 
     return (
-        <Col
-            xs={12} sm={12} md={6} lg={4} xl={4}
-            className="mb-4 d-flex align-items-stretch"
-            style={{ minWidth: '320px', flexShrink: 0 }}
-            key={`part-card-${part.id}-${index}`}
-        >
-            <div className="w-100 h-100 position-relative z-index-0">
+        <div className="w-100 h-100 position-relative z-index-0 align-items-stretch">
                 <Card className="h-100 shadow-sm border-secondary db-card bg-dark text-light">
                     {/* Image Area with 16:9 Aspect Ratio */}
                     <div className="card-img-holder position-relative overflow-hidden"
@@ -133,7 +127,6 @@ const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
                     </Card.Body>
                 </Card>
             </div>
-        </Col>
     );
 };
 

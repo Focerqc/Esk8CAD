@@ -490,7 +490,11 @@ export default ({ platformOverride }: { platformOverride?: string }) => {
                     ) : (
                         <Row className="g-4">
                             {filteredParts.map((part, index) => (
-                                <PartCard key={`part-card-${part.id}-${index}`} part={mapPartToSchema(part)} index={index} />
+                                <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }} key={`part-card-${part.id}-${index}`}>
+                                    <div className="w-100">
+                                        <PartCard part={mapPartToSchema(part)} index={index} />
+                                    </div>
+                                </Col>
                             ))}
                         </Row>
                     )}

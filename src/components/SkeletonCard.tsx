@@ -1,14 +1,10 @@
 import React from "react";
-import { Card, Col } from "react-bootstrap";
+import { Card } from "react-bootstrap";
 
 const SkeletonCard = () => {
     return (
-        <Col
-            xs={12} sm={12} md={6} lg={4} xl={4}
-            className="mb-4 d-flex align-items-stretch"
-            style={{ minWidth: "320px", flexShrink: 0 }}
-        >
-            <div className="w-100 h-100 position-relative z-index-0">
+        <>
+        <div className="w-100 h-100 position-relative z-index-0 align-items-stretch">
                 <Card className="h-100 shadow-sm border-secondary skeleton-card bg-dark text-light overflow-hidden">
                     {/* Image Area placeholder */}
                     <div 
@@ -53,7 +49,7 @@ const SkeletonCard = () => {
                     animation: pulse 1.5s ease-in-out infinite;
                 }
             `}} />
-        </Col>
+        </>
     );
 };
 

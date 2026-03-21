@@ -342,19 +342,33 @@ const CatalogPage: React.FC = () => {
                             </div>
 
                             {isLoading ? (
-                                <div className="parts-catalog-grid">
-                                    {[...Array(6)].map((_, i) => <SkeletonCard key={`skeleton-${i}`} />)}
-                                </div>
+                                <Row className="g-4">
+                                    {[...Array(6)].map((_, i) => (
+                                        <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }} key={`skeleton-${i}`}>
+                                            <SkeletonCard />
+                                        </Col>
+                                    ))}
+                                </Row>
                             ) : filteredParts.length > 0 ? (
-                                <div className="parts-catalog-grid">
+                                <Row className="g-4">
                                     <AnimatePresence mode="popLayout">
                                         {filteredParts.map(part => (
-                                            <motion.div layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} key={`part-${part.id}`}>
-                                                <PartCard part={mapPartToSchema(part)} />
+                                            <motion.div 
+                                                layout 
+                                                initial={{ opacity: 0, scale: 0.95 }} 
+                                                animate={{ opacity: 1, scale: 1 }} 
+                                                exit={{ opacity: 0, scale: 0.95 }} 
+                                                key={`part-${part.id}`}
+                                                className="col-12 col-sm-6 col-md-6 col-lg-4 col-xl-3 mb-4 d-flex align-items-stretch"
+                                                style={{ minWidth: '280px', flexShrink: 0 }}
+                                            >
+                                                <div className="w-100">
+                                                    <PartCard part={mapPartToSchema(part)} />
+                                                </div>
                                             </motion.div>
                                         ))}
                                     </AnimatePresence>
-                                </div>
+                                </Row>
                             ) : (
                                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-5 empty-state bg-dark rounded-4 border border-secondary mt-2 shadow mx-auto" style={{ maxWidth: '600px' }}>
                                     <LucideSearchX size={48} className="text-secondary opacity-50 mb-4" />
@@ -373,10 +387,6 @@ const CatalogPage: React.FC = () => {
             <SiteFooter />
 
             <style dangerouslySetInnerHTML={{__html: `
-                .parts-catalog-grid { display: grid; grid-template-columns: 1fr; gap: 1.5rem; }
-                @media (min-width: 768px) { .parts-catalog-grid { grid-template-columns: repeat(2, 1fr); } }
-                @media (min-width: 1200px) { .parts-catalog-grid { grid-template-columns: repeat(3, 1fr); } }
-                @media (min-width: 1600px) { .parts-catalog-grid { grid-template-columns: repeat(4, 1fr); } }
                 .sticky-top::-webkit-scrollbar { width: 4px; }
                 .sticky-top::-webkit-scrollbar-thumb { background-color: #333; border-radius: 10px; }
                 .sidebar-container { background-color: #0b0e14 !important; }
