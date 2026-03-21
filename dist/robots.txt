@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://esk8cad.com/sitemap-index.xml
-Host: esk8cad.com

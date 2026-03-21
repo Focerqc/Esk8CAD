@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useDeferredValue } from "react"
+import React, { useState, useEffect, useMemo, useDeferredValue, useCallback } from "react"
 import { Container, Row, Col, Offcanvas, Form, InputGroup, Button, Card, Badge as RBABadge } from "react-bootstrap"
 import { motion, AnimatePresence } from "framer-motion"
 import SiteNavbar from "../../components/SiteNavbar"
@@ -13,19 +13,57 @@ import { getSupabaseClient } from "../../lib/supabase"
 import { useFilterUrlSync } from "../../hooks/useFilterUrlSync"
 import { FaMagnifyingGlass, FaXmark, FaFilter, FaArrowRotateLeft } from "react-icons/fa6"
 import { LucideSearchX } from "lucide-react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useParams, useNavigate, useLocation } from "react-router-dom"
 import { useBoardHook } from "../../hooks/useBoardHook"
 import "../../scss/pages/items.scss"
 
 const CatalogPage: React.FC = () => {
     const { brand: pathBrand, model: pathModel } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const { parts, isLoading } = useParts();
-    const [attributeTemplates, setAttributeTemplates] = useState<AttributeTemplate[]>([]);
+    const [categoryTemplatesMap, setCategoryTemplatesMap] = useState<Record<string, AttributeTemplate[]>>({});
     const { groupedModels, brands: allBrands } = useBoardHook();
     
     // Page State
-    const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+    const [activeFilters, _setActiveFilters] = useState<Record<string, any>>({});
+
+    // Wrapped setter to remove orphaned category fields
+    const setActiveFilters = useCallback((valueOrUpdater: React.SetStateAction<Record<string, any>>) => {
+        _setActiveFilters(prev => {
+            const next = typeof valueOrUpdater === 'function' ? valueOrUpdater(prev) : valueOrUpdater;
+            
+            const prevCats = Array.isArray(prev.Category) ? prev.Category : [];
+            const nextCats = Array.isArray(next.Category) ? next.Category : [];
+            const removedCats = prevCats.filter(c => !nextCats.includes(c));
+
+            if (removedCats.length > 0) {
+                const fieldsToRemove = new Set<string>();
+                removedCats.forEach(catName => {
+                    const fields = categoryTemplatesMap[catName];
+                    if (fields) fields.forEach(f => fieldsToRemove.add(f.key));
+                });
+
+                nextCats.forEach(catName => {
+                    const fields = categoryTemplatesMap[catName];
+                    if (fields) fields.forEach(f => fieldsToRemove.delete(f.key));
+                });
+
+                if (fieldsToRemove.size > 0) {
+                    const cleanedNext = { ...next };
+                    let cleaned = false;
+                    fieldsToRemove.forEach(fieldKey => {
+                        if (fieldKey in cleanedNext) {
+                            delete cleanedNext[fieldKey];
+                            cleaned = true;
+                        }
+                    });
+                    return cleaned ? cleanedNext : next;
+                }
+            }
+            return next;
+        });
+    }, [categoryTemplatesMap]);
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [isMobileScreen, setIsMobileScreen] = useState(false);
@@ -52,6 +90,28 @@ const CatalogPage: React.FC = () => {
     // Sync state with URL query parameters seamlessly
     useFilterUrlSync(activeFilters, searchTerm, setActiveFilters, setSearchTerm);
 
+    // Hard-sync on client-side navigation (e.g. clicking Catalog or OEM link)
+    useEffect(() => {
+        // If we navigating EXACTLY to /parts with NO search params
+        if (location.pathname === '/parts' && !location.search) {
+            const hasFilters = Object.keys(activeFilters).length > 0 || searchTerm !== '';
+            if (hasFilters) {
+                setActiveFilters({});
+                setSearchTerm('');
+            }
+        }
+        // If we navigate to /parts?brand=OEM (or similar), we must parse it because useFilterUrlSync only parses on mount
+        else if (location.pathname === '/parts' && location.search) {
+            const params = new URLSearchParams(location.search);
+            const brandOverride = params.get('brand') || params.get('Brand');
+            if (brandOverride && activeFilters.Brand?.[0] !== brandOverride) {
+                // Keep ONLY the brand filter to match what they just clicked
+                setActiveFilters({ Brand: [brandOverride] });
+                setSearchTerm('');
+            }
+        }
+    }, [location.pathname, location.search]);
+
     // Responsive sidebar handling
     useEffect(() => {
         const handleResize = () => {
@@ -70,19 +130,15 @@ const CatalogPage: React.FC = () => {
         const fetchTemplates = async () => {
             const client = getSupabaseClient();
             if (!client) return;
-            const { data, error } = await client.from('part_categories').select('template_fields');
+            const { data, error } = await client.from('part_categories').select('name, template_fields');
             if (data && !error) {
-                const templatesMap = new Map<string, AttributeTemplate>();
+                const templatesByCat: Record<string, AttributeTemplate[]> = {};
                 data.forEach((cat: any) => {
-                    if (cat.template_fields && Array.isArray(cat.template_fields)) {
-                        cat.template_fields.forEach((tf: AttributeTemplate) => {
-                            if (!templatesMap.has(tf.key)) {
-                                templatesMap.set(tf.key, tf);
-                            }
-                        });
+                    if (cat.name && cat.template_fields && Array.isArray(cat.template_fields)) {
+                        templatesByCat[cat.name] = cat.template_fields;
                     }
                 });
-                setAttributeTemplates(Array.from(templatesMap.values()));
+                setCategoryTemplatesMap(templatesByCat);
             }
         };
         fetchTemplates();
@@ -100,8 +156,22 @@ const CatalogPage: React.FC = () => {
             { key: 'Category', type: 'array', options: categoryOptions.sort() }
         ];
 
-        return [...rootTemplates, ...attributeTemplates];
-    }, [parts, attributeTemplates]);
+        const activeCategories: string[] = Array.isArray(activeFilters.Category) ? activeFilters.Category : [];
+        const dynamicTemplatesMap = new Map<string, AttributeTemplate>();
+
+        activeCategories.forEach(catName => {
+            const fields = categoryTemplatesMap[catName];
+            if (fields) {
+                fields.forEach((tf: AttributeTemplate) => {
+                    if (!dynamicTemplatesMap.has(tf.key)) {
+                        dynamicTemplatesMap.set(tf.key, tf);
+                    }
+                });
+            }
+        });
+
+        return [...rootTemplates, ...Array.from(dynamicTemplatesMap.values())];
+    }, [parts, categoryTemplatesMap, activeFilters.Category]);
 
     // Active Brand and Model for the "Platform Hub" header
     const activeBrandName = activeFilters.Brand?.[0];
@@ -182,7 +252,7 @@ const CatalogPage: React.FC = () => {
             </header>
 
             <main className="flex-grow-1">
-                <Container fluid className="px-lg-5 my-4">
+                <Container fluid className="px-lg-5 my-4 mx-auto" style={{ maxWidth: '2000px' }}>
                     {/* RESTORED BRAND HUB HEADER */}
                     {currentBrand && (
                         <motion.div 
@@ -344,7 +414,7 @@ const CatalogPage: React.FC = () => {
                             {isLoading ? (
                                 <Row className="g-4">
                                     {[...Array(6)].map((_, i) => (
-                                        <Col xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }} key={`skeleton-${i}`}>
+                                        <Col xs={12} sm={6} md={6} lg={4} xl={3} xxl={2} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }} key={`skeleton-${i}`}>
                                             <SkeletonCard />
                                         </Col>
                                     ))}
@@ -359,7 +429,7 @@ const CatalogPage: React.FC = () => {
                                                 animate={{ opacity: 1, scale: 1 }} 
                                                 exit={{ opacity: 0, scale: 0.95 }} 
                                                 key={`part-${part.id}`}
-                                                className="col-12 col-sm-6 col-md-6 col-lg-4 col-xl-3 mb-4 d-flex align-items-stretch"
+                                                className="col-12 col-sm-6 col-md-6 col-lg-4 col-xl-3 col-xxl-2 mb-4 d-flex align-items-stretch"
                                                 style={{ minWidth: '280px', flexShrink: 0 }}
                                             >
                                                 <div className="w-100">
