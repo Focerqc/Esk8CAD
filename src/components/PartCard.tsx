@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Badge, Card, Col } from "react-bootstrap";
 import { Link } from "react-router-dom";
+import AttributeTooltip from "./AttributeTooltip";
 
 export interface PartSchema {
     id: string;
@@ -99,7 +100,12 @@ const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
                                         const unit = (part.attributes as any)[`${key}__unit`] || '';
                                         return (
                                             <span key={key} className="bg-slate-800/50 px-2 py-1 rounded">
-                                                {key}: {String(value)} {unit}
+                                                {key}: 
+                                                <AttributeTooltip value={value} unit={unit}>
+                                                    <span className="ms-1 text-light">
+                                                        {String(value)} {unit}
+                                                    </span>
+                                                </AttributeTooltip>
                                             </span>
                                         );
                                     })}

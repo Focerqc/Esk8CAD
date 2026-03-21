@@ -45,6 +45,9 @@ export function normalizeValue(part: Part, key: string): { value: any, unit: str
     if (key === 'Category' || key === 'category') {
         return { value: part.part_categories?.name, unit: '' };
     }
+    if (key === 'Model' || key === 'model') {
+        return { value: part.models?.name, unit: '' };
+    }
 
     const attributes = part?.attributes as Record<string, any>;
     if (!attributes) return { value: undefined, unit: '' };
