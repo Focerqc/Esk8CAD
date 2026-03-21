@@ -84,7 +84,7 @@ const Page: React.FC = () => {
                                         <span className="small fw-bold text-light uppercase letter-spacing-1">0-9 / A - I</span>
                                     </div>
                                     <div className="d-flex flex-wrap gap-2">
-                                        {group1.map(b => (
+                                        {group1?.map(b => (
                                             <Button key={b.id} variant="outline-info" href={getPlatformHref(b)} className="flex-fill fw-bold text-wrap lh-sm text-center" style={{ minWidth: "46%" }}>
 
                                                 {b.name}
@@ -97,7 +97,7 @@ const Page: React.FC = () => {
                                         <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
                                     </div>
                                     <div className="d-flex flex-wrap gap-2">
-                                        {group2.map(b => (
+                                        {group2?.map(b => (
                                             <Button key={b.id} variant="outline-info" href={getPlatformHref(b)} className="flex-fill fw-bold text-wrap lh-sm text-center" style={{ minWidth: "46%" }}>
 
                                                 {b.name}
@@ -110,7 +110,7 @@ const Page: React.FC = () => {
                                         <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
                                     </div>
                                     <div className="d-flex flex-wrap gap-2">
-                                        {group3.map(b => (
+                                        {group3?.map(b => (
                                             <Button key={b.id} variant="outline-info" href={getPlatformHref(b)} className="flex-fill fw-bold text-wrap lh-sm text-center" style={{ minWidth: "46%" }}>
                                                 {b.name}
                                             </Button>

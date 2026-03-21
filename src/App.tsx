@@ -16,12 +16,14 @@ import ResourceWebsites from './pages/resources/websites';
 import ResourceVideoGuides from './pages/resources/videoguides';
 import ResourceWrittenGuides from './pages/resources/writtenguides';
 import ResourceApplications from './pages/resources/applications';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
     return (
-        <BrowserRouter>
-            <Routes>
-                {/* Core Pages */}
+        <ErrorBoundary>
+            <BrowserRouter>
+                <Routes>
+                    {/* Core Pages */}
                 <Route path="/" element={<Index />} />
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/admin/:tab" element={<Admin />} />
@@ -52,6 +54,7 @@ function App() {
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </BrowserRouter>
+        </ErrorBoundary>
     );
 }
 
