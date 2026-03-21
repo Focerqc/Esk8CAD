@@ -6,6 +6,7 @@ export interface AttributeTemplate {
     options?: string[];
     unit?: string;
     description?: string;
+    is_bearing?: boolean;
 }
 
 // Re-export Part for convenience

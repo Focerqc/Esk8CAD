@@ -39,12 +39,12 @@ const CatalogPage: React.FC = () => {
 
             if (removedCats.length > 0) {
                 const fieldsToRemove = new Set<string>();
-                removedCats.forEach(catName => {
+                removedCats.forEach((catName: string) => {
                     const fields = categoryTemplatesMap[catName];
                     if (fields) fields.forEach(f => fieldsToRemove.add(f.key));
                 });
 
-                nextCats.forEach(catName => {
+                nextCats.forEach((catName: string) => {
                     const fields = categoryTemplatesMap[catName];
                     if (fields) fields.forEach(f => fieldsToRemove.delete(f.key));
                 });
@@ -164,13 +164,34 @@ const CatalogPage: React.FC = () => {
             if (fields) {
                 fields.forEach((tf: AttributeTemplate) => {
                     if (!dynamicTemplatesMap.has(tf.key)) {
-                        dynamicTemplatesMap.set(tf.key, tf);
+                        dynamicTemplatesMap.set(tf.key, { ...tf });
                     }
                 });
             }
         });
 
-        return [...rootTemplates, ...Array.from(dynamicTemplatesMap.values())];
+        const dynamicTemplates = Array.from(dynamicTemplatesMap.values());
+        
+        // Aggregate options for all enum-like templates that don't have them
+        dynamicTemplates.forEach(template => {
+            if (template.type === 'enum' || template.type === 'array' || template.type === 'string' || (template.type as string) === 'text') {
+                if (!template.options || template.options.length === 0) {
+                    const values = new Set<string>();
+                    parts.forEach(p => {
+                        const val = p.attributes?.[template.key];
+                        if (val) {
+                            if (Array.isArray(val)) val.forEach(v => values.add(String(v)));
+                            else values.add(String(val));
+                        }
+                    });
+                    if (values.size > 0) {
+                        template.options = Array.from(values).sort();
+                    }
+                }
+            }
+        });
+
+        return [...rootTemplates, ...dynamicTemplates];
     }, [parts, categoryTemplatesMap, activeFilters.Category]);
 
     // Active Brand and Model for the "Platform Hub" header
@@ -357,7 +378,7 @@ const CatalogPage: React.FC = () => {
 
                     <Row>
                         {/* Sidebar Column */}
-                        <Col lg={3} xl={3} xxl={2} className={`d-none d-lg-block sticky-top`} style={{ top: '80px', height: 'calc(100vh - 100px)', overflowY: 'auto' }}>
+                        <Col lg={4} xl={4} xxl={3} className={`d-none d-lg-block sticky-top`} style={{ top: '80px', height: 'calc(100vh - 100px)', overflowY: 'auto' }}>
                             <div className="sidebar-container bg-dark p-3 rounded-4 border border-secondary shadow-lg">
                                 <FilterSidebar 
                                     templates={fullAttributeTemplates} 
@@ -389,7 +410,7 @@ const CatalogPage: React.FC = () => {
                         </Offcanvas>
 
                         {/* Parts Grid Column */}
-                        <Col lg={9} xl={9} xxl={10} className="px-3">
+                        <Col lg={8} xl={8} xxl={9} className="px-3">
                             <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
                                 <div className="d-flex align-items-center">
                                     <motion.h4 key={filteredParts.length} initial={{ y: 10, opacity: 0 }} animate={{ y: 0, opacity: 0.75 }} className="m-0">
@@ -412,7 +433,7 @@ const CatalogPage: React.FC = () => {
                             </div>
 
                             {isLoading ? (
-                                <Row className="g-4">
+                                <Row className="g-4 parts-grid">
                                     {[...Array(6)].map((_, i) => (
                                         <Col xs={12} sm={6} md={6} lg={4} xl={3} xxl={2} className="mb-4 d-flex align-items-stretch" style={{ minWidth: '280px', flexShrink: 0 }} key={`skeleton-${i}`}>
                                             <SkeletonCard />
@@ -420,7 +441,7 @@ const CatalogPage: React.FC = () => {
                                     ))}
                                 </Row>
                             ) : filteredParts.length > 0 ? (
-                                <Row className="g-4">
+                                <Row className="g-4 parts-grid">
                                     <AnimatePresence mode="popLayout">
                                         {filteredParts.map(part => (
                                             <motion.div 

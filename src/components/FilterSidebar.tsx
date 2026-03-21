@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Accordion, Badge, Stack } from 'react-bootstrap';
+import { Form, Accordion, Badge, Stack, Button } from 'react-bootstrap';
 import { AttributeTemplate } from '../util/filterUtils';
 
 interface FilterSidebarProps {
@@ -22,6 +22,14 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
         
         return a.key.localeCompare(b.key);
     });
+
+    const handleResetFilter = (key: string) => {
+        setActiveFilters(prev => {
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
+    };
 
     const getSummary = (template: AttributeTemplate) => {
         const { key, type, unit } = template;
@@ -102,12 +110,12 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
     };
 
     const renderFilterInput = (template: AttributeTemplate) => {
-        const { key, type, options, unit } = template;
+        const { key, type, options, unit, is_bearing } = template;
         const currentFilter = activeFilters[key];
 
-        if (type === 'enum' || type === 'string' || type === 'array') {
+        if (type === 'enum' || type === 'string' || type === 'array' || (type as string) === 'text') {
             const opts = options || [];
-            if (opts.length === 0) return <div className="small text-muted fst-italic">No options defined</div>;
+            if (opts.length === 0) return <div className="small text-muted fst-italic">No options found</div>;
             
             return (
                 <div className="d-flex flex-column gap-2 mt-2">
@@ -121,36 +129,66 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
                             className="text-light opacity-75"
                         />
                     ))}
+                    {currentFilter && (
+                        <div className="d-flex justify-content-start mt-2">
+                            <Button 
+                                variant="outline-secondary" 
+                                size="sm" 
+                                className="px-2 py-1 extreme-small fw-bold uppercase transition-all opacity-75 hover-opacity-100"
+                                onClick={() => handleResetFilter(key)}
+                                style={{ fontSize: '10px', letterSpacing: '0.05em', borderRadius: '4px' }}
+                            >
+                                Reset {key}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             );
         }
 
         if (type === 'dimension' || type === 'weight' || type === 'number') {
             return (
-                <div className="d-flex align-items-center gap-2 mt-2">
-                    <Form.Control 
-                        type="number" 
-                        placeholder="Min" 
-                        size="sm"
-                        className="bg-black text-light border-secondary"
-                        value={currentFilter?.min !== undefined ? currentFilter.min : ''}
-                        onChange={(e) => handleMinMaxChange(key, 'min', e.target.value)}
-                    />
-                    <span className="text-muted">-</span>
-                    <Form.Control 
-                        type="number" 
-                        placeholder="Max" 
-                        size="sm"
-                        className="bg-black text-light border-secondary"
-                        value={currentFilter?.max !== undefined ? currentFilter.max : ''}
-                        onChange={(e) => handleMinMaxChange(key, 'max', e.target.value)}
-                    />
-                    {unit && <span className="small text-info opacity-75">{unit}</span>}
+                <div className="d-flex flex-column gap-2 mt-2">
+                    <div className="d-flex align-items-center gap-2">
+                        <Form.Control 
+                            type="number" 
+                            placeholder="Min" 
+                            size="sm"
+                            style={{ flex: 1, minWidth: '95px' }}
+                            className="bg-black text-light border-secondary"
+                            value={currentFilter?.min !== undefined ? currentFilter.min : ''}
+                            onChange={(e) => handleMinMaxChange(key, 'min', e.target.value)}
+                        />
+                        <span className="text-muted small">-</span>
+                        <Form.Control 
+                            type="number" 
+                            placeholder="Max" 
+                            size="sm"
+                            style={{ flex: 1, minWidth: '95px' }}
+                            className="bg-black text-light border-secondary"
+                            value={currentFilter?.max !== undefined ? currentFilter.max : ''}
+                            onChange={(e) => handleMinMaxChange(key, 'max', e.target.value)}
+                        />
+                        {unit && <span className="small text-info opacity-75 flex-shrink-0">{unit}</span>}
+                    </div>
+                    {currentFilter && (
+                        <div className="d-flex justify-content-start mt-2">
+                            <Button 
+                                variant="outline-secondary" 
+                                size="sm" 
+                                className="px-2 py-1 extreme-small fw-bold uppercase transition-all opacity-75 hover-opacity-100"
+                                onClick={() => handleResetFilter(key)}
+                                style={{ fontSize: '10px', letterSpacing: '0.05em', borderRadius: '4px' }}
+                            >
+                                Reset {key}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             );
         }
 
-        if (type === 'bearing_size') {
+        if (type === 'bearing_size' || is_bearing) {
             return (
                 <div className="d-flex flex-column gap-2 mt-2">
                     {['id', 'od', 'width'].map((dim) => (
@@ -160,6 +198,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
                                 type="number" 
                                 placeholder="Min" 
                                 size="sm"
+                                style={{ flex: 1, minWidth: '85px' }}
                                 className="bg-black text-light border-secondary"
                                 value={currentFilter?.min?.[dim] !== undefined ? currentFilter.min[dim] : ''}
                                 onChange={(e) => handleMinMaxChange(key, 'min', e.target.value, dim as any)}
@@ -168,12 +207,26 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
                                 type="number" 
                                 placeholder="Max" 
                                 size="sm"
+                                style={{ flex: 1, minWidth: '85px' }}
                                 className="bg-black text-light border-secondary"
                                 value={currentFilter?.max?.[dim] !== undefined ? currentFilter.max[dim] : ''}
                                 onChange={(e) => handleMinMaxChange(key, 'max', e.target.value, dim as any)}
                             />
                         </div>
                     ))}
+                    {currentFilter && (
+                        <div className="d-flex justify-content-start mt-2">
+                            <Button 
+                                variant="outline-secondary" 
+                                size="sm" 
+                                className="px-2 py-1 extreme-small fw-bold uppercase transition-all opacity-75 hover-opacity-100"
+                                onClick={() => handleResetFilter(key)}
+                                style={{ fontSize: '10px', letterSpacing: '0.05em', borderRadius: '4px' }}
+                            >
+                                Reset {key}
+                            </Button>
+                        </div>
+                    )}
                 </div>
             );
         }
@@ -242,6 +295,12 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ templates, activeFilters,
                 .filter-sidebar .accordion-item {
                     border: none;
                     border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+                }
+                .filter-sidebar .accordion-body {
+                    padding: 0 0.5rem 1.5rem 0.5rem !important;
+                }
+                .hover-text-danger:hover {
+                    color: #ff4d4d !important;
                 }
             `}} />
         </div>
