@@ -7,7 +7,17 @@ export default defineConfig({
   clearScreen: true,
   plugins: [react(), tsconfigPaths()],
   build: {
-    minify: false,
+    minify: true,
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          'vendor-ui': ['react-bootstrap', 'bootstrap'],
+          'vendor-utils': ['zod', '@supabase/supabase-js', 'lucide-react']
+        }
+      }
+    }
   },
   server: {
     port: 3000,
