@@ -17,6 +17,7 @@ export interface PartSchema {
     fabrication_methods?: { name: string; slug?: string | null } | null;
     models?: { name: string; slug?: string | null } | null;
     attributes?: Record<string, any> | null;
+    is_oem?: boolean;
 }
 
 const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
@@ -85,6 +86,16 @@ const PartCard = ({ part, index }: { part: PartSchema; index?: number }) => {
                                         {part.fabrication_methods.name}
                                     </Badge>
                                 )}
+                                {part.is_oem && (
+                                    <Badge bg="none" style={{ color: '#a855f7', borderColor: '#a855f7', backgroundColor: 'rgba(168, 85, 247, 0.1)' }} className="border py-1 px-1 rounded-md">
+                                        OEM
+                                    </Badge>
+                                )}
+                                {part.tags && part.tags.length > 0 && part.tags.map(tag => (
+                                    <Badge key={tag} bg="none" className="border border-zinc-700 py-1 px-1 rounded-md text-zinc-400">
+                                        {tag}
+                                    </Badge>
+                                ))}
                             </div>
 
                             {/* Dynamic Specifications (JSONB) */}

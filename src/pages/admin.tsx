@@ -2462,7 +2462,7 @@ export default function AdminPage() {
                                     <div className="bg-black p-4 rounded border border-secondary mb-4 shadow-inner">
                                         {(() => {
                                             const activeCat = partCategories.find(c => c.id === editingPart.category_id);
-                                            const attributes = editingPart.attributes || {};
+                                            const attributes = (editingPart.attributes || {}) as Record<string, any>;
                                             const templateFields = activeCat?.template_fields || [];
 
                                             return (
@@ -2490,7 +2490,7 @@ export default function AdminPage() {
                                                                                                 const parts = bVal.split('x');
                                                                                                 parts[idx] = newVal || '0';
                                                                                                 const finalVal = parts.join('x');
-                                                                                                const newAttrs = { ...attributes, [tf.key]: finalVal };
+                                                                                                const newAttrs: Record<string, any> = { ...attributes, [tf.key]: finalVal };
                                                                                                 newAttrs[`${tf.key}__unit`] = attributeDimensionUnits[tf.key] || 'mm';
                                                                                                 setEditingPart({ ...editingPart, attributes: newAttrs });
                                                                                             };
@@ -2528,9 +2528,8 @@ export default function AdminPage() {
                                                                                             placeholder={tf.placeholder || (tf.type === 'dimension' ? "44" : "")}
                                                                                             value={attributes[tf.key] || ""}
                                                                                             onChange={e => {
-                                                                                                const newAttrs = { ...attributes, [tf.key]: e.target.value };
-                                                                                                const unit = tf.type === 'dimension' ? (attributeDimensionUnits[tf.key] || 'mm') : tf.unit;
-                                                                                                if (unit) newAttrs[`${tf.key}__unit`] = unit;
+                                                                                                const newAttrs: Record<string, any> = { ...attributes, [tf.key]: e.target.value };
+                                                                                                newAttrs[`${tf.key}__unit`] = tf.type === 'dimension' ? (attributeDimensionUnits[tf.key] || 'mm') : tf.unit;
                                                                                                 setEditingPart({ ...editingPart, attributes: newAttrs });
                                                                                             }}
                                                                                             className="input-contrast text-white p-2 shadow-sm border-secondary text-end"
@@ -2598,6 +2597,7 @@ export default function AdminPage() {
                                                             attributes={attributes}
                                                             onChange={(newAttrs) => setEditingPart({ ...editingPart, attributes: newAttrs })}
                                                             templateFields={templateFields || []}
+                                                            suggestions={attributeDictionary.map(a => a.key)}
                                                         />
                                                     </div>
                                                 </>

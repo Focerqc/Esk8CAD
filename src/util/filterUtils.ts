@@ -49,6 +49,12 @@ export function normalizeValue(part: Part, key: string): { value: any, unit: str
     if (key === 'Model' || key === 'model') {
         return { value: part.models?.name, unit: '' };
     }
+    if (key === 'Tags' || key === 'tags' || key === 'type_of_part') {
+        return { value: part.type_of_part, unit: '' };
+    }
+    if (key === 'is_oem' || key === 'OEM') {
+        return { value: part.is_oem, unit: '' };
+    }
 
     const attributes = part?.attributes as Record<string, any>;
     if (!attributes) return { value: undefined, unit: '' };

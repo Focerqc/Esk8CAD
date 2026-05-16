@@ -186,7 +186,7 @@ export default ({ isHomepage }: NavbarProps) => {
                 <Navbar.Collapse id="site-navbar" className="order-lg-2">
                     <Nav className="ms-auto me-lg-4 gap-lg-2">
                         <Nav.Link as={Link} to="/parts">Catalog</Nav.Link>
-                        <Nav.Link as={Link} to="/parts?brand=OEM" style={{ color: '#00E5FF', fontWeight: '900' }}>OEM</Nav.Link>
+                        <Nav.Link as={Link} to="/oem" style={{ color: '#00E5FF', fontWeight: '900' }}>OEM</Nav.Link>
                         <Nav.Link as={Link} to="/submit">Submit</Nav.Link>
                         <NavDropdown title="Board Platforms" renderMenuOnMount={true} focusFirstItemOnShow="keyboard" id="nav-parts-dropdown">
                             {navPlatforms.map((p, index) => {

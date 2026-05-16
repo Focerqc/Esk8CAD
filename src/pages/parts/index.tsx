@@ -100,6 +100,13 @@ const CatalogPage: React.FC = () => {
                 setSearchTerm('');
             }
         }
+        // If we navigate to /oem, we must apply the OEM tag filter
+        else if (location.pathname === '/oem') {
+            if (activeFilters.is_oem !== true) {
+                setActiveFilters({ is_oem: true });
+                setSearchTerm('');
+            }
+        }
         // If we navigate to /parts?brand=OEM (or similar), we must parse it because useFilterUrlSync only parses on mount
         else if (location.pathname === '/parts' && location.search) {
             const params = new URLSearchParams(location.search);
@@ -257,6 +264,7 @@ const CatalogPage: React.FC = () => {
         fabrication_methods: part.fabrication_methods || null,
         models: part.models || null,
         attributes: part.attributes || {},
+        is_oem: part.is_oem || false,
     });
 
     return (
@@ -267,7 +275,7 @@ const CatalogPage: React.FC = () => {
                 {/* Only show the large title if we DON'T have a brand hub header active */}
                 {!currentBrand && (
                     <h1 className="flex-center uppercase letter-spacing-2 mt-5 mb-0" style={{ fontWeight: 900 }}>
-                        ALL PARTS
+                        {location.pathname === '/oem' ? 'OEM PARTS' : 'ALL PARTS'}
                     </h1>
                 )}
             </header>

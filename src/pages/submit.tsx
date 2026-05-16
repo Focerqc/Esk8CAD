@@ -91,7 +91,8 @@ const PartFormItem = ({
     setDimensionUnits,
     dimensionTypes,
     setDimensionTypes,
-    onUnsavedChange
+    onUnsavedChange,
+    attributeSuggestions
 }: {
     index: number;
     control: any;
@@ -107,6 +108,7 @@ const PartFormItem = ({
     dimensionTypes: Record<string, 'text' | 'dimension'>;
     setDimensionTypes: Dispatch<SetStateAction<Record<string, 'text' | 'dimension'>>>;
     onUnsavedChange?: (hasUnsaved: boolean) => void;
+    attributeSuggestions?: string[];
 }) => {
     const [activeTab, setActiveTab] = useState<'category' | 'platform' | 'method' | null>(null)
     const [isScraping, setIsScraping] = useState(false)
@@ -720,6 +722,7 @@ const PartFormItem = ({
                                                     onChange={field.onChange}
                                                     templateFields={templateFields || []}
                                                     onUnsavedChange={setHasUnsavedCustomAttr}
+                                                    suggestions={attributeSuggestions}
                                                 />
                                             )}
                                         />
@@ -778,6 +781,7 @@ const SubmitPage: React.FC = () => {
     const [isTaxonomyLoading, setIsTaxonomyLoading] = useState(true)
     const [dimensionUnits, setDimensionUnits] = useState<Record<string, 'in' | 'mm' | 'cm'>>({})
     const [dimensionTypes, setDimensionTypes] = useState<Record<string, 'text' | 'dimension'>>({})
+    const [attributeSuggestions, setAttributeSuggestions] = useState<string[]>([])
 
     // Setup React Hook Form native integration
     const { control, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
@@ -827,6 +831,25 @@ const SubmitPage: React.FC = () => {
                     if (pData && pData.length > 0) setPlatforms(pData);
                     if (catData && catData.length > 0) setCategories(catData);
                     if (fData && fData.length > 0) setFabricationMethods(fData);
+                }
+                
+                // Fetch recent attributes for suggestions
+                const { data: recentParts } = await client
+                    .from('parts')
+                    .select('attributes')
+                    .limit(100)
+                    .not('attributes', 'is', null);
+                
+                if (isMounted && recentParts) {
+                    const keys = new Set<string>();
+                    recentParts.forEach(p => {
+                        if (p.attributes) {
+                            Object.keys(p.attributes).forEach(k => {
+                                if (!k.endsWith('__unit')) keys.add(k);
+                            });
+                        }
+                    });
+                    setAttributeSuggestions(Array.from(keys).sort());
                 }
             } catch (err) {
                 console.error("Failed to fetch taxonomy:", err);
@@ -1109,7 +1132,8 @@ const SubmitPage: React.FC = () => {
                                                 setDimensionUnits={setDimensionUnits}
                                                 dimensionTypes={dimensionTypes}
                                                 setDimensionTypes={setDimensionTypes}
-                                                onUnsavedChange={(val) => setUnsavedMap(prev => ({ ...prev, [field.id]: val }))}
+                                                onUnsavedChange={(val: boolean) => setUnsavedMap(prev => ({ ...prev, [field.id]: val }))}
+                                                attributeSuggestions={attributeSuggestions}
                                             />
                                         ))}
 

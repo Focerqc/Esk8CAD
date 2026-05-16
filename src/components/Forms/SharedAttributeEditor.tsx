@@ -6,13 +6,15 @@ interface SharedAttributeEditorProps {
     onChange: (attributes: Record<string, any>) => void;
     templateFields?: { key: string }[];
     onUnsavedChange?: (hasUnsaved: boolean) => void;
+    suggestions?: string[];
 }
 
 const SharedAttributeEditor: React.FC<SharedAttributeEditorProps> = ({
     attributes,
     onChange,
     templateFields = [],
-    onUnsavedChange
+    onUnsavedChange,
+    suggestions = []
 }) => {
     const [newCustomKey, setNewCustomKey] = useState("");
     const [newCustomType, setNewCustomType] = useState<'text' | 'dimension'>("dimension");
@@ -91,7 +93,12 @@ const SharedAttributeEditor: React.FC<SharedAttributeEditorProps> = ({
                             className={`bg-dark text-white p-2 small ${!newCustomKey && 'border-warning border-opacity-25'}`}
                             value={newCustomKey}
                             onChange={e => setNewCustomKey(e.target.value)}
+                            list="attribute-suggestions"
+                            style={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8f9fa' }}
                         />
+                        <datalist id="attribute-suggestions">
+                            {suggestions.map(s => <option key={s} value={s} />)}
+                        </datalist>
                     </Col>
                     <Col md={2}>
                         <Form.Select 
@@ -107,6 +114,7 @@ const SharedAttributeEditor: React.FC<SharedAttributeEditorProps> = ({
                                     setNewCustomUnit("mm");
                                 }
                             }}
+                            style={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8f9fa' }}
                         >
                             <option value="dimension">Dimension</option>
                             <option value="text">Other Units</option>
@@ -125,6 +133,7 @@ const SharedAttributeEditor: React.FC<SharedAttributeEditorProps> = ({
                             className={`bg-dark text-white p-2 small text-center ${!newCustomUnit && 'border-warning border-opacity-50'}`}
                             value={newCustomUnit}
                             onChange={e => setNewCustomUnit(e.target.value)}
+                            style={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8f9fa' }}
                         />
 
                         {/* Secondary Quick-links Below */}
@@ -167,7 +176,9 @@ const SharedAttributeEditor: React.FC<SharedAttributeEditorProps> = ({
                                     onChange={e => setNewCustomValue(e.target.value)}
                                     onKeyDown={e => e.key === 'Enter' && handleAdd()}
                                     style={{ 
-                                        backgroundColor: 'transparent',
+                                        backgroundColor: '#0f172a',
+                                        borderColor: '#334155',
+                                        color: '#f8f9fa',
                                         ...((newCustomType === 'dimension' || newCustomUnit) ? { borderRight: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 } : {})
                                     }}
                                 />

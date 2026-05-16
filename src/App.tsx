@@ -33,6 +33,7 @@ function App() {
 
                 {/* Catalog & Tags */}
                 <Route path="/parts" element={<Parts />} />
+                <Route path="/oem" element={<Parts />} />
                 <Route path="/parts/tags/:category" element={<Parts />} />
                 <Route path="/tags/:category" element={<Parts />} />
 

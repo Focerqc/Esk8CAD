@@ -34,6 +34,16 @@ https://esk8cad.com/submit
 - **Notes:** 
 
 
+### OEM Parts
+- **Local:** 
+http://localhost:5173/oem
+- **Live:** 
+https://esk8cad.com/oem
+
+
+- **Notes:** 
+
+
 ### About Me (fosterqc)
 - **Local:** 
 http://localhost:5173/fosterqc

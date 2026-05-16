@@ -3,7 +3,7 @@ import { Container, Row, Col, Badge, Stack } from 'react-bootstrap';
 import SiteNavbar from '../components/SiteNavbar';
 import SiteFooter from '../components/SiteFooter';
 import SiteMetaData from '../components/SiteMetaData';
-import { FaGithub, FaEnvelope, FaGlobe } from 'react-icons/fa6';
+import { FaGithub, FaEnvelope, FaCode, FaDatabase, FaFilter } from 'react-icons/fa6';
 
 const FosterqcPage: React.FC = () => {
     return (
@@ -17,28 +17,52 @@ const FosterqcPage: React.FC = () => {
                         <Col lg={8}>
                             <div className="text-center mb-5">
                                 <h1 className="display-3 fw-black tracking-tighter mb-2">fosterqc</h1>
-                                <Badge bg="info" className="text-dark px-3 py-2 uppercase letter-spacing-1">Creator of ESK8CAD.COM</Badge>
+                                <Badge bg="info" className="text-dark px-3 py-2 uppercase letter-spacing-1">Developer & Architect</Badge>
                             </div>
 
                             <div className="glass-card p-4 p-md-5 border border-zinc-800 rounded-4 bg-zinc-900/30 backdrop-blur-sm mb-5">
                                 <h2 className="h4 fw-bold text-info mb-4 uppercase letter-spacing-1">About Me</h2>
                                 <div className="lead opacity-75 space-y-4">
                                     <p>
-                                        Hey, I'm Quinn (aka fosterqc). I build tools and libraries for the ESK8 and PEV communities.
+                                        Hey, I'm Quinn (aka fosterqc). I specialize in building the technical infrastructure that powers community-driven platforms like ESK8CAD.COM.
                                     </p>
                                     <p>
-                                        ESK8CAD.COM was born out of a need for a centralized, curated repository of CAD files for electric skateboards. Whether you're a DIY builder looking for motor mounts or an OEM designer checking tolerances, this project is for you.
+                                        My focus on this project has been transforming it from a simple list into a powerful, searchable database. I built the <strong>Make/Model</strong> and <strong>Brand/Board</strong> filtering systems, the <strong>Supabase database integration</strong>, and the entire <strong>Submit/Admin ecosystem</strong>.
                                     </p>
                                     <p>
-                                        I also run <a href="https://PubParts.xyz" className="text-info text-decoration-none fw-bold">PubParts.xyz</a> for the Onewheel community.
+                                        One of my key contributions is the <strong>Attribute Tagging System</strong>, which allows users to filter by specific dimensions like wheel diameter, width, and motor diameter—enabling precise searches without relying on keywords in titles.
                                     </p>
                                 </div>
                             </div>
 
-                            <Row className="g-4">
+                            <Row className="g-4 mb-5">
+                                <Col md={4}>
+                                    <div className="h-100 p-4 border border-zinc-800 rounded-4 bg-zinc-900/20 text-center">
+                                        <FaDatabase className="text-info fs-2 mb-3" />
+                                        <h3 className="h6 fw-bold uppercase mb-2">Database</h3>
+                                        <p className="small opacity-50 mb-0">Full Supabase architecture & Admin management.</p>
+                                    </div>
+                                </Col>
+                                <Col md={4}>
+                                    <div className="h-100 p-4 border border-zinc-800 rounded-4 bg-zinc-900/20 text-center">
+                                        <FaFilter className="text-info fs-2 mb-3" />
+                                        <h3 className="h6 fw-bold uppercase mb-2">Filtering</h3>
+                                        <p className="small opacity-50 mb-0">Advanced Make/Model & Attribute search systems.</p>
+                                    </div>
+                                </Col>
+                                <Col md={4}>
+                                    <div className="h-100 p-4 border border-zinc-800 rounded-4 bg-zinc-900/20 text-center">
+                                        <FaCode className="text-info fs-2 mb-3" />
+                                        <h3 className="h6 fw-bold uppercase mb-2">Submissions</h3>
+                                        <p className="small opacity-50 mb-0">Streamlined community part submission workflow.</p>
+                                    </div>
+                                </Col>
+                            </Row>
+
+                            <Row className="justify-content-center">
                                 <Col md={6}>
-                                    <div className="h-100 p-4 border border-zinc-800 rounded-4 bg-zinc-900/20">
-                                        <h3 className="h6 fw-bold text-secondary uppercase mb-3">Get in Touch</h3>
+                                    <div className="p-4 border border-zinc-800 rounded-4 bg-zinc-900/20">
+                                        <h3 className="h6 fw-bold text-secondary uppercase mb-3">Connect</h3>
                                         <Stack gap={3}>
                                             <div className="d-flex align-items-center gap-3">
                                                 <div className="p-2 bg-info/10 text-info rounded-3">
@@ -51,20 +75,6 @@ const FosterqcPage: React.FC = () => {
                                                     <FaGithub />
                                                 </div>
                                                 <a href="https://github.com/Focerqc" className="text-light text-decoration-none opacity-75 hover-opacity-100">github.com/Focerqc</a>
-                                            </div>
-                                        </Stack>
-                                    </div>
-                                </Col>
-                                <Col md={6}>
-                                    <div className="h-100 p-4 border border-zinc-800 rounded-4 bg-zinc-900/20">
-                                        <h3 className="h6 fw-bold text-secondary uppercase mb-3">Other Projects</h3>
-                                        <Stack gap={2}>
-                                            <a href="https://PubParts.xyz" className="d-flex align-items-center justify-content-between p-2 rounded-2 hover-bg-zinc-800 text-light text-decoration-none">
-                                                <span>PubParts.xyz</span>
-                                                <FaGlobe className="text-info opacity-50" />
-                                            </a>
-                                            <div className="p-2 rounded-2 opacity-50 small">
-                                                More projects coming soon...
                                             </div>
                                         </Stack>
                                     </div>
@@ -84,12 +94,6 @@ const FosterqcPage: React.FC = () => {
                 .uppercase { text-transform: uppercase; }
                 .glass-card {
                     box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-                }
-                .hover-bg-zinc-800:hover {
-                    background-color: rgba(39, 39, 42, 0.5);
-                }
-                .hover-opacity-100:hover {
-                    opacity: 1 !important;
                 }
                 .space-y-4 > * + * {
                     margin-top: 1.5rem;
