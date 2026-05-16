@@ -6,7 +6,7 @@
 
 ### Home / Index Page
 - **Local:** 
-http://localhost:5173/
+http://localhost:3000/
 - **Live:** 
 https://esk8cad.com/
 
@@ -16,7 +16,7 @@ https://esk8cad.com/
 
 ### Admin Dashboard
 - **Local:** 
-http://localhost:5173/admin
+http://localhost:3000/admin
 - **Live:** 
 https://esk8cad.com/admin
 
@@ -26,7 +26,7 @@ https://esk8cad.com/admin
 
 ### Submit Page
 - **Local:** 
-http://localhost:5173/submit
+http://localhost:3000/submit
 - **Live:** 
 https://esk8cad.com/submit
 
@@ -34,9 +34,19 @@ https://esk8cad.com/submit
 - **Notes:** 
 
 
+### Form Lab (Taxonomy Sandbox)
+- **Local:** 
+http://localhost:3000/testsubmitform
+- **Live:** 
+https://esk8cad.com/testsubmitform
+
+
+- **Notes:** 
+
+
 ### OEM Parts
 - **Local:** 
-http://localhost:5173/oem
+http://localhost:3000/oem
 - **Live:** 
 https://esk8cad.com/oem
 
@@ -46,7 +56,7 @@ https://esk8cad.com/oem
 
 ### About Me (fosterqc)
 - **Local:** 
-http://localhost:5173/fosterqc
+http://localhost:3000/fosterqc
 - **Live:** 
 https://esk8cad.com/fosterqc
 
@@ -60,7 +70,7 @@ https://esk8cad.com/fosterqc
 
 ### Main Parts Catalog
 - **Local:** 
-http://localhost:5173/parts
+http://localhost:3000/parts
 - **Live:** 
 https://esk8cad.com/parts
 
@@ -70,9 +80,9 @@ https://esk8cad.com/parts
 
 ### Brand Pages (Example)
 - **Local:** 
-http://localhost:5173/fosterqc
+http://localhost:3000/brand/evolve
 - **Live:** 
-https://esk8cad.com/fosterqc
+https://esk8cad.com/brand/evolve
 
 
 - **Notes:** 
@@ -84,7 +94,7 @@ https://esk8cad.com/fosterqc
 
 ### Main Resources Index
 - **Local:** 
-http://localhost:5173/resources
+http://localhost:3000/resources
 - **Live:** 
 https://esk8cad.com/resources
 
@@ -94,7 +104,7 @@ https://esk8cad.com/resources
 
 ### Vendors
 - **Local:** 
-http://localhost:5173/resources/vendors
+http://localhost:3000/resources/vendors
 - **Live:** 
 https://esk8cad.com/resources/vendors
 
@@ -104,7 +114,7 @@ https://esk8cad.com/resources/vendors
 
 ### Spreadsheets
 - **Local:** 
-http://localhost:5173/resources/spreadsheets
+http://localhost:3000/resources/spreadsheets
 - **Live:** 
 https://esk8cad.com/resources/spreadsheets
 
@@ -114,7 +124,7 @@ https://esk8cad.com/resources/spreadsheets
 
 ### Repositories
 - **Local:** 
-http://localhost:5173/resources/repositories
+http://localhost:3000/resources/repositories
 - **Live:** 
 https://esk8cad.com/resources/repositories
 
@@ -124,7 +134,7 @@ https://esk8cad.com/resources/repositories
 
 ### Websites
 - **Local:** 
-http://localhost:5173/resources/websites
+http://localhost:3000/resources/websites
 - **Live:** 
 https://esk8cad.com/resources/websites
 
@@ -134,7 +144,7 @@ https://esk8cad.com/resources/websites
 
 ### Video Guides
 - **Local:** 
-http://localhost:5173/resources/videoguides
+http://localhost:3000/resources/videoguides
 - **Live:** 
 https://esk8cad.com/resources/videoguides
 
@@ -144,7 +154,7 @@ https://esk8cad.com/resources/videoguides
 
 ### Written Guides
 - **Local:** 
-http://localhost:5173/resources/writtenguides
+http://localhost:3000/resources/writtenguides
 - **Live:** 
 https://esk8cad.com/resources/writtenguides
 
@@ -154,9 +164,9 @@ https://esk8cad.com/resources/writtenguides
 
 ### Applications
 - **Local:** 
-http://localhost:5173/resources/applications
+http://localhost:3000/resources/applications
 - **Live:** 
 https://esk8cad.com/resources/applications
 
 
-- **Notes:** 
+- **Notes:**

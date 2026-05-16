@@ -144,7 +144,7 @@ export default function HardwareFields({
 
                                     {!isAddingNewModel && modelId && !models.some(m => m.id === modelId) && (
                                         <Badge bg="warning" text="dark" className="d-flex align-items-center gap-2 px-3 py-2 text-uppercase fw-bold small cursor-pointer" onClick={() => onChangeModel(null)}>
-                                            🚩 {modelId}
+                                            🚩 {modelId.length > 15 ? `${modelId.substring(0, 8)}...` : modelId}
                                         </Badge>
                                     )}
 

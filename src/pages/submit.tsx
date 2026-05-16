@@ -1,11 +1,17 @@
 import React, { useState, useEffect, Dispatch, SetStateAction } from "react"
-import { Container, Button, Form, Alert, Spinner, Image, Card, Row, Col, Badge, InputGroup, OverlayTrigger, Popover } from "react-bootstrap"
+import { Container, Button, Form, Alert, Spinner, Image, Card, Row, Col, Badge, InputGroup, OverlayTrigger, Popover, Modal } from "react-bootstrap"
 import { useForm, useFieldArray, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import SiteFooter from "../components/SiteFooter"
 import SiteNavbar from "../components/SiteNavbar"
 import SiteMetaData from "../components/SiteMetaData"
+
+export interface Taxonomy {
+    id: string;
+    name: string;
+    template_fields?: any[] | null;
+}
 import ClientOnly from "../components/ClientOnly"
 import HardwareFields from "../components/Forms/HardwareFields"
 import SharedAttributeEditor from "../components/Forms/SharedAttributeEditor"
@@ -77,7 +83,8 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>
 
 // --- Sub-Component: PartForm ---
-const PartFormItem = ({
+
+export const PartFormItem = ({
     index,
     control,
     remove,
@@ -113,6 +120,7 @@ const PartFormItem = ({
     isLandscape?: boolean;
 }) => {
     const [activeTab, setActiveTab] = useState<'category' | 'platform' | 'method' | null>(null)
+    const [showSelectionModal, setShowSelectionModal] = useState(false);
     const [isScraping, setIsScraping] = useState(false)
     const [showAllAttributes, setShowAllAttributes] = useState(false);
     const [zoomedFields, setZoomedFields] = useState<Record<string, boolean>>({});
@@ -190,17 +198,21 @@ const PartFormItem = ({
         }
     };
 
+    const [autoIsLandscape] = useState(window.innerWidth > 1400);
+
+    const effectiveIsLandscape = isLandscape !== undefined ? isLandscape : autoIsLandscape;
+
     return (
-        <Card className={`bg-dark text-light border-secondary shadow-lg mb-5 part-form-card ${isLandscape ? 'landscape-mode' : ''}`} style={isLandscape ? { maxWidth: '1600px', margin: '0 -250px' } : {}}>
-            <Card.Header className="bg-secondary border-0 p-4 d-flex justify-content-between align-items-center">
-                <h4 className="mb-0 fs-5 fw-bold uppercase letter-spacing-1">Part #{index + 1}</h4>
+        <Card className={`bg-dark text-light border-secondary shadow-lg mb-5 part-form-card ${effectiveIsLandscape ? 'landscape-mode' : ''}`} style={effectiveIsLandscape ? { width: '100%', maxWidth: '1300px' } : {}}>
+            <Card.Header className="bg-secondary border-0 p-3 d-flex justify-content-between align-items-center">
+                <h4 className="mb-0 fs-6 fw-bold uppercase letter-spacing-1">Part #{index + 1}</h4>
                 {canRemove && (
                     <Button variant="outline-danger" size="sm" onClick={() => remove(index)}>Remove</Button>
                 )}
             </Card.Header>
-            <Card.Body className="p-4 p-md-5">
-                <div className={isLandscape ? "row g-4" : ""}>
-                    <div className={isLandscape ? "col-lg-4 border-end border-secondary border-opacity-25" : ""}>
+            <Card.Body className="p-3 p-md-4">
+                <div className={effectiveIsLandscape ? "row g-4" : ""}>
+                    <div className={effectiveIsLandscape ? "col-lg-4 border-end border-secondary border-opacity-25" : ""}>
                         {/* 1. Primary URL Input */}
                 <Form.Group className="mb-4">
                     <Form.Label className="fw-bold fs-5">Project Link (cad_link) *</Form.Label>
@@ -337,7 +349,7 @@ const PartFormItem = ({
                     </Col>
                 </Row>
                         
-                        {!isLandscape && (
+                        {!effectiveIsLandscape && (
                              <div className="bg-black rounded border border-secondary overflow-hidden position-relative shadow-inner mt-4" style={{ width: '100%', paddingBottom: '75%' }}>
                                  {imageSrcValue && <Image src={imageSrcValue} className="position-absolute w-100 h-100 p-2" style={{ objectFit: 'contain' }} />}
                                  {!imageSrcValue && <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-muted small">No Image Preview</div>}
@@ -346,167 +358,145 @@ const PartFormItem = ({
                     </div>
 
                     {/* COLUMN 2: TAXONOMY & HARDWARE */}
-                    <div className={isLandscape ? "col-lg-4 border-end border-secondary border-opacity-25" : ""}>
-                        {!isLandscape && <hr className="my-5 border-secondary opacity-25" />}
+                    <div className={effectiveIsLandscape ? "col-lg-4 border-end border-secondary border-opacity-25" : ""}>
+                        {!effectiveIsLandscape && <hr className="my-5 border-secondary opacity-25" />}
                         <h5 className="fw-bold mb-4 uppercase extreme-small opacity-50">2. Categorization</h5>
 
-                    <div className="d-flex flex-wrap gap-2 mb-2">
-                        <Button className={`taxonomy-btn ${activeTab === 'platform' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'platform' ? null : 'platform')}>Manufacturer (Platform) *</Button>
-                        <Button className={`taxonomy-btn ${activeTab === 'category' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'category' ? null : 'category')}>Part Category *</Button>
-                        <Button className={`taxonomy-btn ${activeTab === 'method' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'method' ? null : 'method')}>Fabrication Method *</Button>
+                    <div className="d-flex flex-wrap gap-2 mb-4">
+                        <Button variant={selectedPlatformId ? "info" : "outline-info"} size="sm" className="px-3 py-2 fw-bold uppercase letter-spacing-1 flex-fill shadow-sm" onClick={() => { setActiveTab('platform'); setShowSelectionModal(true); }}>
+                            {selectedPlatformId ? platforms.find(p => p.id === selectedPlatformId)?.name : "Manufacturer (Platform) *"}
+                        </Button>
+                        <Button variant={selectedCategoryId ? "info" : "outline-info"} size="sm" className="px-3 py-2 fw-bold uppercase letter-spacing-1 flex-fill shadow-sm" onClick={() => { setActiveTab('category'); setShowSelectionModal(true); }}>
+                            {selectedCategoryId ? categories.find(c => c.id === selectedCategoryId)?.name : "Part Category *"}
+                        </Button>
+                        <Button variant={selectedFabricationMethodId ? "info" : "outline-info"} size="sm" className="px-3 py-2 fw-bold uppercase letter-spacing-1 flex-fill shadow-sm" onClick={() => { setActiveTab('method'); setShowSelectionModal(true); }}>
+                            {selectedFabricationMethodId ? fabricationMethods.find(f => f.id === selectedFabricationMethodId)?.name : "Fabrication Method *"}
+                        </Button>
                     </div>
 
-                    <div className={`mt-3 p-4 rounded bg-secondary border border-secondary shadow-sm ${!activeTab ? 'd-none' : ''}`}>
-                        {activeTab === 'category' && (
-                            <div className="d-flex flex-wrap gap-2">
-                                {categories.map(opt => (
-                                    <Badge
-                                        key={opt.id}
-                                        bg={selectedCategoryId === opt.id ? "primary" : "none"}
-                                        className="p-2 border border-light cursor-pointer shadow-sm"
-                                        onClick={() => {
-                                            setValue(`parts.${index}.categoryId`, opt.id, { shouldValidate: true });
-                                            setValue(`parts.${index}.attributes`, {}); // Clear attributes when category changes
-                                            setZoomedFields({}); // Reset zoom states
-                                        }}
-                                    >
-                                        {opt.name}
-                                    </Badge>
-                                ))}
-                            </div>
-                        )}
+                    {selectedPlatformId && (
+                        <div className="p-4 bg-black bg-opacity-50 rounded border border-secondary mb-4 shadow-inner animate-in slide-in-bottom">
+                            <h6 className="extreme-small uppercase fw-bold opacity-50 mb-3 text-info letter-spacing-1">Hardware Association</h6>
+                            <HardwareFields
+                                brandId={selectedPlatformId}
+                                modelId={modelIdValue}
+                                needsModelReview={needsModelReviewValue}
+                                onChangeModel={(val) => setValue(`parts.${index}.modelId`, val, { shouldValidate: true })}
+                                onChangeNeedsReview={(val) => setValue(`parts.${index}.needsModelReview`, val, { shouldValidate: true })}
+                            />
+                        </div>
+                    )}
 
-                        {activeTab === 'platform' && (() => {
-                            const pinnedStreet = platforms.find(p => p.name === "Street (DIY/Generic)");
-                            const pinnedOffroad = platforms.find(p => p.name === "Off-Road (DIY/Generic)");
-                            const pinnedMisc = platforms.find(p => p.name === "Misc");
+                    {/* Selection Modal for Taxonomy */}
+                    <Modal 
+                        show={showSelectionModal} 
+                        onHide={() => setShowSelectionModal(false)} 
+                        centered 
+                        size="lg" 
+                        data-bs-theme="dark" 
+                        className="taxonomy-modal"
+                        scrollable
+                    >
+                        <Modal.Header closeButton className="bg-dark border-secondary">
+                            <Modal.Title className="h6 fw-bold uppercase letter-spacing-1 text-info">
+                                Select {activeTab === 'platform' ? 'Manufacturer' : activeTab === 'category' ? 'Part Category' : 'Fabrication Method'}
+                            </Modal.Title>
+                        </Modal.Header>
+                        <Modal.Body className="bg-dark p-4">
+                            {activeTab === 'platform' && (() => {
+                                const pinnedStreet = platforms.find(p => p.name === "Street (DIY/Generic)");
+                                const pinnedOffroad = platforms.find(p => p.name === "Off-Road (DIY/Generic)");
+                                const pinnedMisc = platforms.find(p => p.name === "Misc");
 
-                            const others = platforms
-                                .filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc"].includes(p.name))
-                                .sort((a, b) => a.name.localeCompare(b.name));
+                                const others = platforms
+                                    .filter(p => !["Street (DIY/Generic)", "Off-Road (DIY/Generic)", "Misc"].includes(p.name))
+                                    .sort((a, b) => a.name.localeCompare(b.name));
 
-                            const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
-                            const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
-                            const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
+                                const group1 = others.filter(p => { const first = p.name[0].toUpperCase(); return (first >= '0' && first <= '9') || (first >= 'A' && first <= 'I'); });
+                                const group2 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'J' && first <= 'R'; });
+                                const group3 = others.filter(p => { const first = p.name[0].toUpperCase(); return first >= 'S' && first <= 'Z'; });
 
-                            return (
-                                <>
-                                    <Row className="g-3 mb-4">
-                                        <Col xs={12} lg={4}>
-                                            {pinnedStreet && (
-                                                <Badge
-                                                    bg={selectedPlatformId === pinnedStreet.id ? "primary" : "none"}
-                                                    className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                    style={{ fontSize: "0.85rem" }}
-                                                    onClick={() => { setValue(`parts.${index}.platformId`, pinnedStreet.id, { shouldValidate: true }); setActiveTab(null); }}
+                                return (
+                                    <div className="d-flex flex-column gap-4">
+                                        <div className="d-flex gap-2 flex-wrap">
+                                            {[pinnedStreet, pinnedOffroad, pinnedMisc].filter(Boolean).map((p: any) => (
+                                                <Button
+                                                    key={p.id}
+                                                    variant={selectedPlatformId === p.id ? "primary" : "outline-light"}
+                                                    className="flex-fill p-3 fw-bold uppercase small"
+                                                    onClick={() => { setValue(`parts.${index}.platformId`, p.id, { shouldValidate: true }); setShowSelectionModal(false); }}
                                                 >
-                                                    {pinnedStreet.name}
-                                                </Badge>
-                                            )}
-                                        </Col>
-                                        <Col xs={12} lg={4}>
-                                            {pinnedOffroad && (
-                                                <Badge
-                                                    bg={selectedPlatformId === pinnedOffroad.id ? "primary" : "none"}
-                                                    className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                    style={{ fontSize: "0.85rem" }}
-                                                    onClick={() => { setValue(`parts.${index}.platformId`, pinnedOffroad.id, { shouldValidate: true }); setActiveTab(null); }}
-                                                >
-                                                    {pinnedOffroad.name}
-                                                </Badge>
-                                            )}
-                                        </Col>
-                                        <Col xs={12} lg={4}>
-                                            {pinnedMisc && (
-                                                <Badge
-                                                    bg={selectedPlatformId === pinnedMisc.id ? "primary" : "none"}
-                                                    className="p-3 border border-light cursor-pointer shadow-sm w-100 uppercase text-wrap lh-sm h-100 d-flex align-items-center justify-content-center"
-                                                    style={{ fontSize: "0.85rem" }}
-                                                    onClick={() => { setValue(`parts.${index}.platformId`, pinnedMisc.id, { shouldValidate: true }); setActiveTab(null); }}
-                                                >
-                                                    {pinnedMisc.name}
-                                                </Badge>
-                                            )}
-                                        </Col>
-                                    </Row>
+                                                    {p.name}
+                                                </Button>
+                                            ))}
+                                        </div>
 
-                                    <h3 className="h6 fw-bold text-light mb-3 uppercase letter-spacing-1 border-bottom border-secondary pb-2">Brands</h3>
+                                        <h3 className="h6 fw-bold text-muted uppercase letter-spacing-1 border-bottom border-secondary border-opacity-25 pb-2">All Registered Brands</h3>
 
-                                    <Row className="g-4">
-                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                            <div className="text-center mb-1">
-                                                <span className="small fw-bold text-light uppercase letter-spacing-1">A - I</span>
-                                            </div>
-                                            <div className="d-flex flex-wrap gap-2">
-                                                {group1.map(opt => (
-                                                    <Badge
-                                                        key={opt.id}
-                                                        bg={selectedPlatformId === opt.id ? "primary" : "none"}
-                                                        className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
-                                                        style={{ minWidth: "46%" }}
-                                                        onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setActiveTab(null); }}
-                                                    >
-                                                        {opt.name}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </Col>
-                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                            <div className="text-center mb-1">
-                                                <span className="small fw-bold text-light uppercase letter-spacing-1">J - R</span>
-                                            </div>
-                                            <div className="d-flex flex-wrap gap-2">
-                                                {group2.map(opt => (
-                                                    <Badge
-                                                        key={opt.id}
-                                                        bg={selectedPlatformId === opt.id ? "primary" : "none"}
-                                                        className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
-                                                        style={{ minWidth: "46%" }}
-                                                        onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setActiveTab(null); }}
-                                                    >
-                                                        {opt.name}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </Col>
-                                        <Col xs={12} lg={4} className="d-flex flex-column gap-2">
-                                            <div className="text-center mb-1">
-                                                <span className="small fw-bold text-light uppercase letter-spacing-1">S - Z</span>
-                                            </div>
-                                            <div className="d-flex flex-wrap gap-2">
-                                                {group3.map(opt => (
-                                                    <Badge
-                                                        key={opt.id}
-                                                        bg={selectedPlatformId === opt.id ? "primary" : "none"}
-                                                        className="p-2 border border-light cursor-pointer shadow-sm flex-fill d-flex align-items-center justify-content-center text-wrap lh-sm"
-                                                        style={{ minWidth: "46%" }}
-                                                        onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setActiveTab(null); }}
-                                                    >
-                                                        {opt.name}
-                                                    </Badge>
-                                                ))}
-                                            </div>
-                                        </Col>
-                                    </Row>
-                                </>
-                            );
-                        })()}
+                                        <Row className="g-4">
+                                            {[group1, group2, group3].map((group, gIdx) => (
+                                                <Col key={gIdx} md={4}>
+                                                    <div className="text-center mb-3">
+                                                        <span className="extreme-small fw-bold text-muted uppercase letter-spacing-1">{gIdx === 0 ? 'A - I' : gIdx === 1 ? 'J - R' : 'S - Z'}</span>
+                                                    </div>
+                                                    <div className="d-flex flex-column gap-2">
+                                                        {group.map(opt => (
+                                                            <Button
+                                                                key={opt.id}
+                                                                variant={selectedPlatformId === opt.id ? "primary" : "outline-secondary"}
+                                                                size="sm"
+                                                                className="text-start px-3 py-2 extreme-small fw-bold uppercase"
+                                                                onClick={() => { setValue(`parts.${index}.platformId`, opt.id, { shouldValidate: true }); setShowSelectionModal(false); }}
+                                                            >
+                                                                {opt.name}
+                                                            </Button>
+                                                        ))}
+                                                    </div>
+                                                </Col>
+                                            ))}
+                                        </Row>
+                                    </div>
+                                );
+                            })()}
 
-                        {activeTab === 'method' && (
-                            <div className="d-flex flex-wrap gap-2">
-                                {fabricationMethods.map(opt => (
-                                    <Badge
-                                        key={opt.id}
-                                        bg={selectedFabricationMethodId === opt.id ? "primary" : "none"}
-                                        className="p-2 border border-light cursor-pointer shadow-sm"
-                                        onClick={() => setValue(`parts.${index}.fabricationMethodId`, opt.id, { shouldValidate: true })}
-                                    >
-                                        {opt.name}
-                                    </Badge>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                            {activeTab === 'category' && (
+                                <div className="row g-3">
+                                    {categories.map(opt => (
+                                        <div key={opt.id} className="col-6 col-md-4">
+                                            <Button
+                                                variant={selectedCategoryId === opt.id ? "primary" : "outline-secondary"}
+                                                className="w-100 p-3 fw-bold uppercase extreme-small"
+                                                onClick={() => { 
+                                                    setValue(`parts.${index}.categoryId`, opt.id, { shouldValidate: true }); 
+                                                    setValue(`parts.${index}.attributes`, {}); 
+                                                    setZoomedFields({});
+                                                    setShowSelectionModal(false); 
+                                                }}
+                                            >
+                                                {opt.name}
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {activeTab === 'method' && (
+                                <div className="row g-3">
+                                    {fabricationMethods.map(opt => (
+                                        <div key={opt.id} className="col-6">
+                                            <Button
+                                                variant={selectedFabricationMethodId === opt.id ? "primary" : "outline-secondary"}
+                                                className="w-100 p-3 fw-bold uppercase extreme-small"
+                                                onClick={() => { setValue(`parts.${index}.fabricationMethodId`, opt.id, { shouldValidate: true }); setShowSelectionModal(false); }}
+                                            >
+                                                {opt.name}
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </Modal.Body>
+                    </Modal>
 
                     <Controller
                         control={control}
@@ -729,8 +719,8 @@ const PartFormItem = ({
                 </div>
 
                         {/* 3rd Column: Preview & Metadata Extension */}
-                        <div className={isLandscape ? "col-lg-4" : ""}>
-                            {isLandscape && (
+                        <div className={effectiveIsLandscape ? "col-lg-4" : ""}>
+                            {effectiveIsLandscape && (
                                 <div className="bg-black rounded border border-secondary overflow-hidden position-relative shadow-inner mb-4" style={{ width: '100%', paddingBottom: '60%' }}>
                                     {imageSrcValue && <Image src={imageSrcValue} className="position-absolute w-100 h-100 p-2" style={{ objectFit: 'contain' }} />}
                                     {!imageSrcValue && <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-muted small">No Image Preview</div>}
@@ -1077,7 +1067,7 @@ const SubmitPage: React.FC = () => {
                 `}} />
                 <SiteMetaData title="ESK8CAD/Submit" />
                 <SiteNavbar />
-                <Container className="py-5" style={{ maxWidth: isLandscape ? '1500px' : '900px' }}>
+                <Container className="py-5" style={{ maxWidth: isLandscape ? '1400px' : '900px' }}>
                     <div className="d-flex justify-content-end mb-3">
                         <Button 
                             variant="outline-info" 
