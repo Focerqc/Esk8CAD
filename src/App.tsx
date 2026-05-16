@@ -16,6 +16,7 @@ import ResourceWebsites from './pages/resources/websites';
 import ResourceVideoGuides from './pages/resources/videoguides';
 import ResourceWrittenGuides from './pages/resources/writtenguides';
 import ResourceApplications from './pages/resources/applications';
+import Fosterqc from './pages/fosterqc';
 import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
                 <Route path="/admin" element={<Admin />} />
                 <Route path="/admin/:tab" element={<Admin />} />
                 <Route path="/submit" element={<Submit />} />
+                <Route path="/fosterqc" element={<Fosterqc />} />
 
                 {/* Catalog & Tags */}
                 <Route path="/parts" element={<Parts />} />

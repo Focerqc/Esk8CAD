@@ -137,6 +137,7 @@ const AdminPartCard = ({ part, actions, onEdit }: { part: Part, actions: React.R
 };
 
 export default function AdminPage() {
+    console.log("Admin Page Loaded");
     const navigate = useNavigate();
     const { tab: urlTab } = useParams();
     const [isMounted, setIsMounted] = useState(false);
@@ -1006,6 +1007,23 @@ export default function AdminPage() {
             fetchData();
         } finally {
             // Cleanup states
+        }
+    };
+
+    const handleConfirmDeleteModel = async () => {
+        if (!editingModelAdmin || !supabase) return;
+        setIsModelSaving(true);
+        try {
+            const id = editingModelAdmin.id;
+            const { error: sbError } = await supabase.from('models').delete().eq('id', id);
+            if (sbError) throw sbError;
+            
+            setEditingModelAdmin(null);
+            refreshBoardData();
+        } catch (err: any) {
+            setError('Failed to delete model: ' + (err.message || String(err)));
+        } finally {
+            setIsModelSaving(false);
         }
     };
     const handleUpdateBrandAdvanced = async () => {
@@ -2675,9 +2693,18 @@ export default function AdminPage() {
                                     <Form.Control type="file" className="bg-light border-0" onChange={(e: any) => e.target.files[0] && editingModelAdmin?.id && handleImageUpload('models', editingModelAdmin.id, e.target.files[0])} disabled={isActionLoading} />
                                     {isActionLoading && <div className="mt-2 small text-info d-flex align-items-center gap-2"><Spinner animation="border" size="sm" /> <span>Syncing to persistent storage...</span></div>}
                                 </Form.Group>
-                                <Button variant="info" className="w-100 fw-bold py-3 uppercase shadow-lg text-white" style={{ borderRadius: '14px', letterSpacing: '0.05em' }} onClick={handleUpdateModelAdvanced} disabled={isModelSaving}>
-                                    {isModelSaving ? <Spinner animation="border" size="sm" /> : 'Apply Changes To Registry'}
-                                </Button>
+                                <div className="d-flex gap-2">
+                                    <Button variant="info" className="w-100 fw-bold py-3 uppercase shadow-lg text-white" style={{ borderRadius: '14px', letterSpacing: '0.05em' }} onClick={handleUpdateModelAdvanced} disabled={isModelSaving}>
+                                        {isModelSaving ? <Spinner animation="border" size="sm" /> : 'Apply Changes To Registry'}
+                                    </Button>
+                                    <Button variant="outline-danger" className="fw-bold px-4" style={{ borderRadius: '14px' }} onClick={() => {
+                                        if (window.confirm(`Permanently delete model "${editingModelAdmin?.name}"?`)) {
+                                            handleConfirmDeleteModel();
+                                        }
+                                    }} disabled={isModelSaving}>
+                                        Delete
+                                    </Button>
+                                </div>
                             </Col>
 
                             {/* Live Preview Panel (Simplified Model Card) */}
