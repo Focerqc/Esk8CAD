@@ -92,7 +92,8 @@ const PartFormItem = ({
     dimensionTypes,
     setDimensionTypes,
     onUnsavedChange,
-    attributeSuggestions
+    attributeSuggestions,
+    isLandscape
 }: {
     index: number;
     control: any;
@@ -109,6 +110,7 @@ const PartFormItem = ({
     setDimensionTypes: Dispatch<SetStateAction<Record<string, 'text' | 'dimension'>>>;
     onUnsavedChange?: (hasUnsaved: boolean) => void;
     attributeSuggestions?: string[];
+    isLandscape?: boolean;
 }) => {
     const [activeTab, setActiveTab] = useState<'category' | 'platform' | 'method' | null>(null)
     const [isScraping, setIsScraping] = useState(false)
@@ -189,7 +191,7 @@ const PartFormItem = ({
     };
 
     return (
-        <Card className="bg-dark text-light border-secondary shadow-lg mb-5 part-form-card">
+        <Card className={`bg-dark text-light border-secondary shadow-lg mb-5 part-form-card ${isLandscape ? 'landscape-mode' : ''}`} style={isLandscape ? { maxWidth: '1600px', margin: '0 -250px' } : {}}>
             <Card.Header className="bg-secondary border-0 p-4 d-flex justify-content-between align-items-center">
                 <h4 className="mb-0 fs-5 fw-bold uppercase letter-spacing-1">Part #{index + 1}</h4>
                 {canRemove && (
@@ -197,7 +199,9 @@ const PartFormItem = ({
                 )}
             </Card.Header>
             <Card.Body className="p-4 p-md-5">
-                {/* 1. Primary URL Input */}
+                <div className={isLandscape ? "row g-4" : ""}>
+                    <div className={isLandscape ? "col-lg-4 border-end border-secondary border-opacity-25" : ""}>
+                        {/* 1. Primary URL Input */}
                 <Form.Group className="mb-4">
                     <Form.Label className="fw-bold fs-5">Project Link (cad_link) *</Form.Label>
                     <InputGroup>
@@ -312,49 +316,39 @@ const PartFormItem = ({
                             />
                         </Form.Group>
 
-                        {/* New Optional Text Fields */}
-                        <div className="d-flex gap-3 mb-4">
+                        <div className="d-flex gap-3">
                             <Form.Group className="flex-fill">
-                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Model Author (Optional)</Form.Label>
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Author</Form.Label>
                                 <Controller
                                     control={control}
                                     name={`parts.${index}.author`}
-                                    render={({ field }) => (
-                                        <Form.Control
-                                            {...field}
-                                            className={`input-contrast text-white p-3 shadow-sm border-secondary`}
-                                            placeholder="e.g. John Doe"
-                                        />
-                                    )}
+                                    render={({ field }) => <Form.Control {...field} className="input-contrast text-white p-3 shadow-sm border-secondary" />}
                                 />
                             </Form.Group>
-
                             <Form.Group className="flex-fill">
-                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Submitted By (Optional)</Form.Label>
+                                <Form.Label className="small uppercase fw-bold opacity-75 text-light">Submitter</Form.Label>
                                 <Controller
                                     control={control}
                                     name={`parts.${index}.submittedBy`}
-                                    render={({ field }) => (
-                                        <Form.Control
-                                            {...field}
-                                            className={`input-contrast text-white p-3 shadow-sm border-secondary`}
-                                            placeholder="Your Name (Empty = Anonymous)"
-                                        />
-                                    )}
+                                    render={({ field }) => <Form.Control {...field} className="input-contrast text-white p-3 shadow-sm border-secondary" />}
                                 />
                             </Form.Group>
                         </div>
                     </Col>
-                    <Col md={5}>
-                        <div className="bg-black rounded border border-secondary overflow-hidden position-relative shadow-inner" style={{ width: '100%', paddingBottom: '75%' }}>
-                            {imageSrcValue && <Image src={imageSrcValue} className="position-absolute w-100 h-100 p-2" style={{ objectFit: 'contain' }} />}
-                            {!imageSrcValue && <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-muted small">No Image Preview</div>}
-                        </div>
-                    </Col>
                 </Row>
+                        
+                        {!isLandscape && (
+                             <div className="bg-black rounded border border-secondary overflow-hidden position-relative shadow-inner mt-4" style={{ width: '100%', paddingBottom: '75%' }}>
+                                 {imageSrcValue && <Image src={imageSrcValue} className="position-absolute w-100 h-100 p-2" style={{ objectFit: 'contain' }} />}
+                                 {!imageSrcValue && <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-muted small">No Image Preview</div>}
+                             </div>
+                        )}
+                    </div>
 
-                {/* 4. Taxonomy Selectors */}
-                <div className="my-5">
+                    {/* COLUMN 2: TAXONOMY & HARDWARE */}
+                    <div className={isLandscape ? "col-lg-4 border-end border-secondary border-opacity-25" : ""}>
+                        {!isLandscape && <hr className="my-5 border-secondary opacity-25" />}
+                        <h5 className="fw-bold mb-4 uppercase extreme-small opacity-50">2. Categorization</h5>
 
                     <div className="d-flex flex-wrap gap-2 mb-2">
                         <Button className={`taxonomy-btn ${activeTab === 'platform' ? 'active' : ''}`} onClick={() => setActiveTab(activeTab === 'platform' ? null : 'platform')}>Manufacturer (Platform) *</Button>
@@ -734,41 +728,51 @@ const PartFormItem = ({
                     })()}
                 </div>
 
-                {/* 5. Additional / Minor Selectors */}
-                <Row className="mb-4">
-                    <Col md={12}>
-                        <Form.Group>
-                            <Form.Label className="small uppercase fw-bold opacity-75 text-light">Mirror Link</Form.Label>
-                            <Controller
-                                control={control}
-                                name={`parts.${index}.dropboxUrl`}
-                                render={({ field, fieldState }) => (
-                                    <>
-                                        <Form.Control
-                                            {...field}
-                                            className={`input-contrast text-white p-3 shadow-sm ${fieldState.error ? 'is-invalid border-danger' : 'border-secondary'}`}
-                                            placeholder="Auto-filled via scraper or custom URL"
-                                        />
-                                        {fieldState.error && <div className="text-danger small mt-1 fw-bold">{fieldState.error.message}</div>}
-                                    </>
-                                )}
-                            />
-                        </Form.Group>
-                    </Col>
-                </Row>
+                        {/* 3rd Column: Preview & Metadata Extension */}
+                        <div className={isLandscape ? "col-lg-4" : ""}>
+                            {isLandscape && (
+                                <div className="bg-black rounded border border-secondary overflow-hidden position-relative shadow-inner mb-4" style={{ width: '100%', paddingBottom: '60%' }}>
+                                    {imageSrcValue && <Image src={imageSrcValue} className="position-absolute w-100 h-100 p-2" style={{ objectFit: 'contain' }} />}
+                                    {!imageSrcValue && <div className="position-absolute w-100 h-100 d-flex align-items-center justify-content-center text-muted small">No Image Preview</div>}
+                                </div>
+                            )}
 
-                <HardwareFields
-                    brandId={selectedPlatformId}
-                    modelId={modelIdValue}
-                    needsModelReview={needsModelReviewValue}
-                    onChangeModel={(m) => setValue(`parts.${index}.modelId`, m, { shouldValidate: true })}
-                    onChangeNeedsReview={(b) => setValue(`parts.${index}.needsModelReview`, b, { shouldValidate: true })}
-                    onUnsavedChange={(val) => setHasUnsavedHardware(val)}
-                />
-            </Card.Body>
-        </Card>
-    )
-}
+                            <Row className="mb-4">
+                                <Col md={12}>
+                                    <Form.Group>
+                                        <Form.Label className="small uppercase fw-bold opacity-75 text-light">Mirror Link</Form.Label>
+                                        <Controller
+                                            control={control}
+                                            name={`parts.${index}.dropboxUrl`}
+                                            render={({ field, fieldState }) => (
+                                                <>
+                                                    <Form.Control
+                                                        {...field}
+                                                        className={`input-contrast text-white p-3 shadow-sm ${fieldState.error ? 'is-invalid border-danger' : 'border-secondary'}`}
+                                                        placeholder="Auto-filled via scraper or custom URL"
+                                                    />
+                                                    {fieldState.error && <div className="text-danger small mt-1 fw-bold">{fieldState.error.message}</div>}
+                                                </>
+                                            )}
+                                        />
+                                    </Form.Group>
+                                </Col>
+                            </Row>
+
+                            <HardwareFields
+                                brandId={selectedPlatformId}
+                                modelId={modelIdValue}
+                                needsModelReview={needsModelReviewValue}
+                                onChangeModel={(m) => setValue(`parts.${index}.modelId`, m, { shouldValidate: true })}
+                                onChangeNeedsReview={(b) => setValue(`parts.${index}.needsModelReview`, b, { shouldValidate: true })}
+                                onUnsavedChange={(val) => setHasUnsavedHardware(val)}
+                            />
+                        </div>
+                    </div>
+                </Card.Body>
+            </Card>
+        );
+    };
 
 // --- Main Component: SubmitPage ---
 const SubmitPage: React.FC = () => {
@@ -782,6 +786,7 @@ const SubmitPage: React.FC = () => {
     const [dimensionUnits, setDimensionUnits] = useState<Record<string, 'in' | 'mm' | 'cm'>>({})
     const [dimensionTypes, setDimensionTypes] = useState<Record<string, 'text' | 'dimension'>>({})
     const [attributeSuggestions, setAttributeSuggestions] = useState<string[]>([])
+    const [isLandscape, setIsLandscape] = useState(false);
 
     // Setup React Hook Form native integration
     const { control, handleSubmit, reset, watch, setValue } = useForm<FormValues>({
@@ -1068,10 +1073,21 @@ const SubmitPage: React.FC = () => {
                     .border-dashed { border-style: dashed !important; border-width: 2px !important; border-color: #24282d !important; }
                     .border-dashed:hover { border-color: #00e5ff !important; background: rgba(0,229,255,0.02) !important; }
                     .extreme-small { font-size: 0.65rem; }
+                    .landscape-mode { width: 100% !important; max-width: 1400px !important; }
                 `}} />
                 <SiteMetaData title="ESK8CAD/Submit" />
                 <SiteNavbar />
-                <Container className="py-5" style={{ maxWidth: '900px' }}>
+                <Container className="py-5" style={{ maxWidth: isLandscape ? '1500px' : '900px' }}>
+                    <div className="d-flex justify-content-end mb-3">
+                        <Button 
+                            variant="outline-info" 
+                            size="sm" 
+                            className="fw-bold uppercase letter-spacing-1"
+                            onClick={() => setIsLandscape(!isLandscape)}
+                        >
+                            {isLandscape ? 'Switch to Vertical' : 'Switch to Landscape'}
+                        </Button>
+                    </div>
                     <header className="text-center mb-5">
                         <h1 className="display-4 fw-bold">Submit Parts</h1>
                         <p className="small text-info uppercase letter-spacing-1 opacity-50 mb-4">Community Contribution Portal</p>
@@ -1134,6 +1150,7 @@ const SubmitPage: React.FC = () => {
                                                 setDimensionTypes={setDimensionTypes}
                                                 onUnsavedChange={(val: boolean) => setUnsavedMap(prev => ({ ...prev, [field.id]: val }))}
                                                 attributeSuggestions={attributeSuggestions}
+                                                isLandscape={isLandscape}
                                             />
                                         ))}
 

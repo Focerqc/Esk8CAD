@@ -8,6 +8,7 @@ const Index = lazy(() => import('./pages/index'));
 const Submit = lazy(() => import('./pages/submit'));
 const Parts = lazy(() => import('./pages/parts/index'));
 const Fosterqc = lazy(() => import('./pages/fosterqc'));
+const TestSubmitForm = lazy(() => import('./pages/testsubmitform'));
 
 // Resource Pages (Lazy)
 const ResourcesIndex = lazy(() => import('./pages/resources/index'));
@@ -39,6 +40,7 @@ function App() {
                         <Route path="/admin/:tab" element={<Admin />} />
                         <Route path="/submit" element={<Submit />} />
                         <Route path="/fosterqc" element={<Fosterqc />} />
+                        <Route path="/testsubmitform" element={<TestSubmitForm />} />
 
                         {/* Catalog & Tags */}
                         <Route path="/parts" element={<Parts />} />

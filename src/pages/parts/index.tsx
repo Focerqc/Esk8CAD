@@ -92,18 +92,13 @@ const CatalogPage: React.FC = () => {
 
     // Hard-sync on client-side navigation (e.g. clicking Catalog or OEM link)
     useEffect(() => {
-        // If we navigating EXACTLY to /parts with NO search params
-        if (location.pathname === '/parts' && !location.search) {
+        if (location.pathname === '/oem') {
+            setActiveFilters(prev => ({ ...prev, OEM: [true] }));
+            setSearchTerm('');
+        } else if (location.pathname === '/parts' && !location.search) {
             const hasFilters = Object.keys(activeFilters).length > 0 || searchTerm !== '';
             if (hasFilters) {
                 setActiveFilters({});
-                setSearchTerm('');
-            }
-        }
-        // If we navigate to /oem, we must apply the OEM tag filter
-        else if (location.pathname === '/oem') {
-            if (activeFilters.is_oem !== true) {
-                setActiveFilters({ is_oem: true });
                 setSearchTerm('');
             }
         }
